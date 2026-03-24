@@ -47,3 +47,4 @@ test-results/
 
 # Docker
 docker/data/
+CLAUDE.md

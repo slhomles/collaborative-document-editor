@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -11,52 +10,70 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  avatarUrl    String?  @map("avatar_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  ownedDocuments   Document[]       @relation("DocumentOwner")
-  documentMembers  DocumentMember[]
+  ownedDocuments   Document[]        @relation("DocumentOwner")
+  memberships      DocumentMember[]
+  versions         DocumentVersion[] @relation("VersionCreator")
+  @@map("users")
 }
 
 model Document {
-  id        String   @id @default(cuid())
-  title     String   @default("Untitled")
-  yjsState  Bytes?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid())
+  title          String   @default("Untitled")
+  ownerId        String   @map("owner_id")
+  yjsState       Bytes?   @map("yjs_state")       // Yjs binary state từ Hocuspocus
+  contentPreview String?  @map("content_preview")  // Text thuần để search
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  ownerId  String
   owner    User             @relation("DocumentOwner", fields: [ownerId], references: [id])
   members  DocumentMember[]
   versions DocumentVersion[]
+
+  @@index([ownerId])
+  @@index([isDeleted])
+  @@map("documents")
 }
 
 model DocumentMember {
-  id         String   @id @default(cuid())
+  id         String   @id @default(uuid())
+  documentId String   @map("document_id")
+  userId     String   @map("user_id")
   role       Role     @default(VIEWER)
-  createdAt  DateTime @default(now())
+  joinedAt   DateTime @default(now()) @map("joined_at")
 
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([documentId, userId])
+  @@unique([documentId, userId])   // mỗi user chỉ có 1 role trong 1 document
+  @@index([userId])
+  @@map("document_members")
 }
 
 model DocumentVersion {
-  id         String   @id @default(cuid())
-  label      String?
-  yjsState   Bytes
-  createdAt  DateTime @default(now())
+  id            String   @id @default(uuid())
+  documentId    String   @map("document_id")
+  createdBy     String   @map("created_by")
+  yjsSnapshot   Bytes    @map("yjs_snapshot")  // snapshot Yjs tại thời điểm này
+  label         String?                         // tên version tuỳ chọn: "v1.0", "Bản nháp"
+  versionNumber Int      @default(autoincrement()) @map("version_number")
+  createdAt     DateTime @default(now()) @map("created_at")
 
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  creator  User     @relation("VersionCreator", fields: [createdBy], references: [id])
+
+  @@index([documentId, versionNumber])
+  @@map("document_versions")
 }
+
 
 enum Role {
   OWNER
