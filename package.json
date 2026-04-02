@@ -9,8 +9,10 @@
     "lint": "pnpm -r lint"
   },
   "packageManager": "pnpm@8.0.0",
-  "workspaces": [
-    "client",
-    "server"
-  ]
+  "devDependencies": {
+    "prisma": "5.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "5.0.0"
+  }
 }
