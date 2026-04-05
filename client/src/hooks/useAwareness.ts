@@ -28,6 +28,8 @@ export function useAwareness(provider: WebsocketProvider | null) {
 
     provider.awareness.on('change', updateUsers)
     provider.on('status', handleStatus)
+    // Sync initial connection state (in case provider already connected before effect ran)
+    setIsOnline(provider.wsconnected)
     updateUsers()
 
     return () => {
