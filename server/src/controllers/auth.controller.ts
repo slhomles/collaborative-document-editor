@@ -19,7 +19,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     if (existing) return res.status(409).json({ message: 'Email already in use' })
 
     const hashed = await bcrypt.hash(password, 10)
-    const user = await prisma.user.create({ data: { email, name, password: hashed } })
+    const user = await prisma.user.create({ data: { email, name, passwordHash: hashed } })
     const token = signToken(user.id)
     res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name } })
   } catch (err) {
@@ -31,7 +31,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password } = req.body
     const user = await prisma.user.findUnique({ where: { email } })
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ message: 'Invalid credentials' })
     }
     const token = signToken(user.id)

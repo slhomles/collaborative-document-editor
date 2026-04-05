@@ -1,5 +1,5 @@
 import express from 'express'
-import cors from 'cors'
+import cors from 'cors' // resovle conflic port 
 import { authRouter } from './routes/auth.routes'
 import { documentRouter } from './routes/document.routes'
 import { errorMiddleware } from './middleware/error.middleware'

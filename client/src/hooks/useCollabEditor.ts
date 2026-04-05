@@ -26,7 +26,7 @@ export function useCollabEditor(documentId: string) {
     return new WebsocketProvider(WS_URL, documentId, ydoc, {
       params: { token: token || '' },
     })
-  }, [documentId, ydoc])
+  }, [documentId, ydoc, token])
 
   // Offline persistence via IndexedDB
   const indexeddbProvider = useMemo(() => {
