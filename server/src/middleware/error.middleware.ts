@@ -7,5 +7,5 @@ export function errorMiddleware(
   _next: NextFunction
 ) {
   console.error(err.stack)
-  res.status(500).json({ message: err.message || 'Internal server error' })
+  res.status(500).json({ error: err.message || 'Internal server error' })
 }
