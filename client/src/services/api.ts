@@ -23,12 +23,15 @@ api.interceptors.response.use(
 )
 
 // Auth
+type AuthUser = { id: string; name: string; email: string; createdAt: string }
+type AuthResponse = { data: { token: string; user: AuthUser } }
+
 export const authApi = {
   login: (email: string, password: string) =>
-    api.post<{ token: string; user: { id: string; name: string; email: string } }>('/auth/login', { email, password }),
+    api.post<AuthResponse>('/auth/login', { email, password }),
   register: (name: string, email: string, password: string) =>
-    api.post('/auth/register', { name, email, password }),
-  me: () => api.get('/auth/me'),
+    api.post<AuthResponse>('/auth/register', { name, email, password }),
+  me: () => api.get<{ data: AuthUser }>('/auth/me'),
 }
 
 // Documents

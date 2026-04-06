@@ -15,7 +15,7 @@ export function useAuth() {
     setError(null)
     try {
       const { data } = await authApi.login(email, password)
-      setAuth(data.token, data.user)
+      setAuth(data.data.token, data.data.user)
       navigate('/')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed')
@@ -29,7 +29,7 @@ export function useAuth() {
     setError(null)
     try {
       const { data } = await authApi.register(name, email, password)
-      setAuth(data.token, data.user)
+      setAuth(data.data.token, data.data.user)
       navigate('/')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed')
