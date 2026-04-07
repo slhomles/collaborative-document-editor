@@ -12,15 +12,16 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
+// Note: React.StrictMode removed intentionally — it double-invokes useEffect cleanup,
+// which destroys WebSocket providers (y-websocket / Hocuspocus) before connection
+// establishes. This is a known incompatibility with WebSocket-based CRDT libraries.
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
-        <Route path="/doc/:id" element={<PrivateRoute><EditorPage /></PrivateRoute>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  </React.StrictMode>
+  <BrowserRouter>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+      <Route path="/doc/:id" element={<PrivateRoute><EditorPage /></PrivateRoute>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  </BrowserRouter>
 )

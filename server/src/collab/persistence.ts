@@ -4,21 +4,21 @@ import Redis from 'ioredis'
 const prisma = new PrismaClient()
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  lazyConnect: true,
-  enableOfflineQueue: false,
+  lazyConnect: true, //not connect immediately
+  enableOfflineQueue: false,// turn off the queue if loss internet, if not it can lead stuck
 })
 
-redis.on('error', (err) => {
+redis.on('error', (err) => { //.on() catch error when some error throw
   console.warn('Redis connection error (non-fatal):', err.message)
 })
 
 const REDIS_TTL = 60 * 60 * 24 // 24 hours
 
 function redisKey(documentId: string) {
-  return `yjs:${documentId}`
+  return `yjs:${documentId}`//redis save everything in one place, not have table,so yjs: like virtual folder/collection
 }
 
-export async function loadDocument(documentId: string): Promise<Buffer | null> {
+export async function loadDocument(documentId: string): Promise<Buffer | null> {//buffer is a binary type, it related yjs and speed
   // 1. Try Redis cache first
   try {
     const cached = await redis.getBuffer(redisKey(documentId))
@@ -38,7 +38,7 @@ export async function loadDocument(documentId: string): Promise<Buffer | null> {
 export async function storeDocument(
   documentId: string,
   state: Buffer,
-  options: { cacheOnly?: boolean } = {}
+  options: { cacheOnly?: boolean } = {}//if don't pass any parameters, empty object will be passed
 ) {
   // Always update Redis
   try {
@@ -56,9 +56,14 @@ export async function storeDocument(
   })
 }
 
-export async function createSnapshot(documentId: string, state: Buffer, label?: string) {
+export async function createSnapshot(
+  documentId: string,
+  createdBy: string,
+  state: Buffer,
+  label?: string
+) {
   await prisma.documentVersion.create({
-    data: { documentId, yjsState: state, label: label ?? new Date().toISOString() },
+    data: { documentId, createdBy, yjsSnapshot: state, label: label ?? new Date().toISOString() },
   })
 }
 

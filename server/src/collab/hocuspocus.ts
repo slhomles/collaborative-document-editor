@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { loadDocument, storeDocument } from './persistence'
 
 export const hocuspocusServer = Server.configure({
+  //verify if a user can edit a document or not
   async onAuthenticate({ token, documentName }) {
     if (!token) throw new Error('Missing token')
 
@@ -14,23 +15,23 @@ export const hocuspocusServer = Server.configure({
       throw new Error('Invalid token')
     }
   },
-
+  // check if a document has content or not
   async onLoadDocument({ documentName, document }) {
     const state = await loadDocument(documentName)
     if (state) {
-      // Apply persisted Yjs state to the document
-      const { applyUpdate } = await import('yjs')
-      applyUpdate(document, state)
+      const { applyUpdate } = await import('yjs')// dynamic import, only import if really vital
+      applyUpdate(document, state)// Apply persisted Yjs state to the document
     }
     return document
   },
-
+  // save a doc to database and redis
   async onStoreDocument({ documentName, document }) {
     const { encodeStateAsUpdate } = await import('yjs')
     const state = Buffer.from(encodeStateAsUpdate(document))
     await storeDocument(documentName, state)
   },
-
+  //only save to cache-redis, you can't save everytime user type a character
+  //advantage: loss internet, other people can see quickly, sync
   async onChange({ documentName, document }) {
     // Throttled snapshot — store in Redis for fast load
     const { encodeStateAsUpdate } = await import('yjs')
