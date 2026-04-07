@@ -6,11 +6,10 @@ import { z } from 'zod'
 import { AuthRequest } from '../middleware/auth.middleware'
 
 const prisma = new PrismaClient()
-const JWT_SECRET = process.env.JWT_SECRET || 'secret'
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
-
 function signToken(userId: string) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions)
+  const secret = process.env.JWT_SECRET || 'secret'
+  const expiresIn = process.env.JWT_EXPIRES_IN || '7d'
+  return jwt.sign({ userId }, secret, { expiresIn } as jwt.SignOptions)
 }
 
 const registerSchema = z.object({
