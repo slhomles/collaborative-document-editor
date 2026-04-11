@@ -1,7 +1,6 @@
 import { Response, NextFunction } from 'express'
-import { PrismaClient, Role } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
-
 const prisma = new PrismaClient()
 
 export async function listDocuments(req: AuthRequest, res: Response, next: NextFunction) {
@@ -9,6 +8,7 @@ export async function listDocuments(req: AuthRequest, res: Response, next: NextF
     const userId = req.userId!
     const docs = await prisma.document.findMany({
       where: {
+        isDeleted: false,
         OR: [
           { ownerId: userId },
           { members: { some: { userId } } },
@@ -43,6 +43,7 @@ export async function getDocument(req: AuthRequest, res: Response, next: NextFun
     const doc = await prisma.document.findFirst({
       where: {
         id,
+        isDeleted: false,
         OR: [{ ownerId: userId }, { members: { some: { userId } } }],
       },
       include: {
@@ -83,48 +84,29 @@ export async function deleteDocument(req: AuthRequest, res: Response, next: Next
     const doc = await prisma.document.findFirst({ where: { id, ownerId: userId } })
     if (!doc) return res.status(403).json({ message: 'Only owner can delete' })
 
-    await prisma.document.delete({ where: { id } })
+    await prisma.document.update({ where: { id }, data: { isDeleted: true } })
     res.status(204).send()
   } catch (err) {
     next(err)
   }
 }
 
-export async function addMember(req: AuthRequest, res: Response, next: NextFunction) {
+export async function searchDocuments(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const { id } = req.params
     const userId = req.userId!
-    const { email, role } = req.body
+    const q = String(req.query.q || '').trim()
+    if (!q) return res.json([])
 
-    const doc = await prisma.document.findFirst({ where: { id, ownerId: userId } })
-    if (!doc) return res.status(403).json({ message: 'Only owner can manage members' })
-
-    const targetUser = await prisma.user.findUnique({ where: { email } })
-    if (!targetUser) return res.status(404).json({ message: 'User not found' })
-
-    const member = await prisma.documentMember.upsert({
-      where: { documentId_userId: { documentId: id, userId: targetUser.id } },
-      create: { documentId: id, userId: targetUser.id, role: role || Role.VIEWER },
-      update: { role: role || Role.VIEWER },
+    const docs = await prisma.document.findMany({
+      where: {
+        isDeleted: false,
+        contentPreview: { contains: q, mode: 'insensitive' },
+        OR: [{ ownerId: userId }, { members: { some: { userId } } }],
+      },
+      select: { id: true, title: true, createdAt: true, updatedAt: true, owner: { select: { name: true } } },
+      orderBy: { updatedAt: 'desc' },
     })
-    res.json(member)
-  } catch (err) {
-    next(err)
-  }
-}
-
-export async function removeMember(req: AuthRequest, res: Response, next: NextFunction) {
-  try {
-    const { id, userId: targetUserId } = req.params
-    const userId = req.userId!
-
-    const doc = await prisma.document.findFirst({ where: { id, ownerId: userId } })
-    if (!doc) return res.status(403).json({ message: 'Only owner can manage members' })
-
-    await prisma.documentMember.deleteMany({
-      where: { documentId: id, userId: targetUserId },
-    })
-    res.status(204).send()
+    res.json(docs)
   } catch (err) {
     next(err)
   }

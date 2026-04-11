@@ -13,6 +13,8 @@ redis.on('error', (err) => { //.on() catch error when some error throw
 })
 
 const REDIS_TTL = 60 * 60 * 24 // 24 hours
+const AUTO_SNAPSHOT_DEBOUNCE_MS = 30 * 1000 // 30s
+const snapshotTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 function redisKey(documentId: string) {
   return `yjs:${documentId}`//redis save everything in one place, not have table,so yjs: like virtual folder/collection
@@ -62,19 +64,38 @@ export async function createSnapshot(
   state: Buffer,
   label?: string
 ) {
-  await prisma.documentVersion.create({
+  return prisma.documentVersion.create({
     data: { documentId, createdBy, yjsSnapshot: state, label: label ?? new Date().toISOString() },
+    select: { id: true, documentId: true, createdBy: true, label: true, versionNumber: true, createdAt: true },
   })
 }
 
 export async function listSnapshots(documentId: string) {
   return prisma.documentVersion.findMany({
     where: { documentId },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, label: true, createdAt: true },
+    orderBy: { versionNumber: 'desc' },
+    select: { id: true, label: true, versionNumber: true, createdBy: true, createdAt: true },
   })
 }
 
 export async function getSnapshot(snapshotId: string) {
   return prisma.documentVersion.findUnique({ where: { id: snapshotId } })
+}
+
+export function scheduleAutoSnapshot(documentId: string, userId: string, state: Buffer) {
+  const existing = snapshotTimers.get(documentId)
+  if (existing) clearTimeout(existing)
+
+  const timer = setTimeout(async () => {
+    snapshotTimers.delete(documentId)
+    try {
+      await prisma.documentVersion.create({
+        data: { documentId, createdBy: userId, yjsSnapshot: state, label: new Date().toISOString() },
+      })
+    } catch (err) {
+      console.warn('Auto-snapshot failed:', (err as Error).message)
+    }
+  }, AUTO_SNAPSHOT_DEBOUNCE_MS)
+
+  snapshotTimers.set(documentId, timer)
 }

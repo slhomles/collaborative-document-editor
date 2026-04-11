@@ -38,6 +38,7 @@ export const authApi = {
 export const documentApi = {
   list: () => api.get<Document[]>('/documents'),
   create: (title?: string) => api.post('/documents', { title }),
+  search: (q: string) => api.get(`/documents/search`, { params: { q } }),
   get: (id: string) => api.get(`/documents/${id}`),
   update: (id: string, title: string) => api.patch(`/documents/${id}`, { title }),
   delete: (id: string) => api.delete(`/documents/${id}`),
@@ -45,4 +46,11 @@ export const documentApi = {
     api.post(`/documents/${id}/members`, { email, role }),
   removeMember: (id: string, userId: string) =>
     api.delete(`/documents/${id}/members/${userId}`),
+}
+
+// Versions
+export const versionApi = {
+  list: (docId: string) => api.get(`/documents/${docId}/versions`),
+  create: (docId: string, label?: string) => api.post(`/documents/${docId}/versions`, { label }),
+  get: (docId: string, versionId: string) => api.get(`/documents/${docId}/versions/${versionId}`),
 }
