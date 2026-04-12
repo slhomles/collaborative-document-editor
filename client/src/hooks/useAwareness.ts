@@ -17,8 +17,12 @@ export function useAwareness(provider: WebsocketProvider | null) {
     function updateUsers() {
       const states = Array.from(provider!.awareness.getStates().entries())
       const list: AwarenessUser[] = states
-        .filter(([, state]) => state.user)
-        .map(([clientId, state]) => ({ clientId, ...state.user }))
+        .filter(([, state]) => state.user?.name)
+        .map(([clientId, state]) => ({
+          clientId,
+          name: state.user.name,
+          color: state.user.color || '#94a3b8',
+        }))
       setUsers(list)
     }
 
@@ -28,8 +32,6 @@ export function useAwareness(provider: WebsocketProvider | null) {
 
     provider.awareness.on('change', updateUsers)
     provider.on('status', handleStatus)
-    // Sync initial connection state (in case provider already connected before effect ran)
-    setIsOnline(provider.wsconnected)
     updateUsers()
 
     return () => {
