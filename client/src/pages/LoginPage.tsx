@@ -16,19 +16,38 @@ export function LoginPage() {
     setConfirmPassword('')
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setLocalError('')
-    if (mode === 'login') {
-      login(email, password)
-    } else {
-      if (password !== confirmPassword) {
-        setLocalError('Mật khẩu xác nhận không khớp!')
-        return
-      }
-      register(name, email, password)
+
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault()
+  setLocalError('')
+
+  if (mode === 'login') {
+    await login(email, password)
+  } else {
+    // 1. Kiểm tra logic trước khi gửi
+    if (password !== confirmPassword) {
+      setLocalError('Mật khẩu xác nhận không khớp!')
+      return
+    }
+
+    // 2. Chờ Server xử lý đăng ký
+    try {
+      await register(name, email, password)
+      
+      // 3. Nếu thành công (không nhảy vào catch), thực hiện Reset
+      setName('')
+      setEmail('')
+      setPassword('')
+      setConfirmPassword('')
+      setMode('login') // Chuyển về màn hình đăng nhập để user vào luôn
+      
+      alert('Đăng ký thành công! Mời bạn đăng nhập.')
+    } catch (err) {
+      // Lỗi từ Server sẽ được hook useAuth xử lý, 
+      // hoặc bạn có thể xử lý thêm ở đây nếu cần.
     }
   }
+}
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -40,7 +59,7 @@ export function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">Soạn thảo cộng tác realtime</p>
         </div>
 
-        {/* Tab switch */}
+        {/* Tab s4witch */}
         <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
           <button
             onClick={() => handleModeChange('login')}
