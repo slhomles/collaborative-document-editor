@@ -55,20 +55,16 @@ export function Toolbar({ editor }: Props) {
   ]
 
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div className="flex gap-1">
       {buttons.map((btn) => (
         <button
           key={btn.label}
           onClick={btn.action}
-          style={{
-            padding: '4px 8px',
-            fontSize: 12,
-            fontWeight: btn.isActive ? 700 : 400,
-            background: btn.isActive ? '#e0e7ff' : '#f5f5f5',
-            border: '1px solid #ddd',
-            borderRadius: 4,
-            cursor: 'pointer',
-          }}
+          className={`px-2 py-1 text-xs rounded border cursor-pointer transition-colors ${
+            btn.isActive
+              ? 'font-bold bg-indigo-100 border-indigo-300 text-indigo-700'
+              : 'font-normal bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+          }`}
         >
           {btn.label}
         </button>

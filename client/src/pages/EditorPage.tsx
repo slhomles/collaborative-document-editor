@@ -13,25 +13,30 @@ export function EditorPage() {
   const { users, isOnline } = useAwareness(provider)
 
   return (
-    <div style={{ display: 'flex', height: '100vh', flexDirection: 'column' }}>
+    <div className="flex flex-col h-screen">
       {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #eee', gap: 12 }}>
-        <button onClick={() => navigate('/')}>← Quay lại</button>
+      <div className="flex items-center px-4 py-2 border-b border-gray-200 gap-3">
+        <button
+          onClick={() => navigate('/')}
+          className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          ← Quay lại
+        </button>
         <Toolbar editor={editor} />
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: isOnline ? 'green' : 'gray' }}>
+        <span className={`ml-auto text-xs font-medium ${isOnline ? 'text-green-600' : 'text-gray-400'}`}>
           {isOnline ? '● Online' : '○ Offline'}
         </span>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="flex flex-1 overflow-hidden">
         {/* Main editor */}
-        <div style={{ flex: 1, overflow: 'auto', padding: 24, position: 'relative' }}>
+        <div className="flex-1 overflow-auto p-6 relative">
           <CollabCursor editor={editor} />
           <Editor editor={editor} />
         </div>
 
         {/* Sidebar */}
-        <div style={{ width: 220, borderLeft: '1px solid #eee', padding: 16, overflow: 'auto' }}>
+        <div className="w-56 border-l border-gray-200 p-4 overflow-auto bg-gray-50">
           <UserList users={users} />
         </div>
       </div>
