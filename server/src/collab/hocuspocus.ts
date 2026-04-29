@@ -1,6 +1,6 @@
 import { Server } from '@hocuspocus/server'
 import jwt from 'jsonwebtoken'
-import { loadDocument, storeDocument, scheduleAutoSnapshot } from './persistence'
+import { loadDocument, storeDocument, scheduleAutoSnapshot, throttledCacheUpdate } from './persistence'
 
 export const hocuspocusServer = Server.configure({
   //verify if a user can edit a document or not
@@ -33,10 +33,10 @@ export const hocuspocusServer = Server.configure({
   //only save to cache-redis, you can't save everytime user type a character
   //advantage: loss internet, other people can see quickly, sync
   async onChange({ documentName, document, context }) {
-    // Throttled snapshot — store in Redis for fast load
     const { encodeStateAsUpdate } = await import('yjs')
     const state = Buffer.from(encodeStateAsUpdate(document))
-    await storeDocument(documentName, state, { cacheOnly: true })
+    // Throttle 300ms để tránh ghi Redis trên mỗi keystroke; flush tự động.
+    throttledCacheUpdate(documentName, state)
 
     // Schedule auto-snapshot every 30s of inactivity
     const userId = (context as { userId?: string })?.userId

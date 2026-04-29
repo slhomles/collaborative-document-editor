@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { WebsocketProvider } from 'y-websocket'
+import { IndexeddbPersistence } from 'y-indexeddb'
 
 export interface AwarenessUser {
   clientId: number
@@ -7,9 +8,32 @@ export interface AwarenessUser {
   color: string
 }
 
-export function useAwareness(provider: WebsocketProvider | null) {
+export type ConnectionState =
+  | 'connecting'
+  | 'connected'
+  | 'disconnected'
+  | 'offline-cached'
+
+export function useAwareness(
+  provider: WebsocketProvider | null,
+  indexeddbProvider: IndexeddbPersistence | null = null,
+) {
   const [users, setUsers] = useState<AwarenessUser[]>([])
-  const [isOnline, setIsOnline] = useState(false)
+  const [connection, setConnection] = useState<ConnectionState>('connecting')
+  const [indexeddbSynced, setIndexeddbSynced] = useState(false)
+
+  useEffect(() => {
+    if (!indexeddbProvider) return
+
+    function handleSynced() {
+      setIndexeddbSynced(true)
+    }
+
+    indexeddbProvider.on('synced', handleSynced)
+    return () => {
+      indexeddbProvider.off('synced', handleSynced)
+    }
+  }, [indexeddbProvider])
 
   useEffect(() => {
     if (!provider) return
@@ -23,13 +47,16 @@ export function useAwareness(provider: WebsocketProvider | null) {
     }
 
     function handleStatus({ status }: { status: string }) {
-      setIsOnline(status === 'connected')
+      // y-websocket phát ra: 'connecting' | 'connected' | 'disconnected'
+      if (status === 'connected') setConnection('connected')
+      else if (status === 'connecting') setConnection('connecting')
+      else setConnection('disconnected')
     }
 
     provider.awareness.on('change', updateUsers)
     provider.on('status', handleStatus)
-    // Sync initial connection state (in case provider already connected before effect ran)
-    setIsOnline(provider.wsconnected)
+    // Sync initial state phòng trường hợp provider đã connect xong trước khi effect chạy.
+    setConnection(provider.wsconnected ? 'connected' : 'connecting')
     updateUsers()
 
     return () => {
@@ -38,5 +65,9 @@ export function useAwareness(provider: WebsocketProvider | null) {
     }
   }, [provider])
 
-  return { users, isOnline }
+  // Khi đã mất kết nối WS nhưng IndexedDB đã hydrate xong → user vẫn edit được offline.
+  const effectiveConnection: ConnectionState =
+    connection === 'disconnected' && indexeddbSynced ? 'offline-cached' : connection
+
+  return { users, connection: effectiveConnection }
 }

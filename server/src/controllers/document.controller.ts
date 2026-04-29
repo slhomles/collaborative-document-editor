@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Role } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
+import { invalidateDocumentCache } from '../collab/persistence'
 const prisma = new PrismaClient()
 
 export async function listDocuments(req: AuthRequest, res: Response, next: NextFunction) {
@@ -85,6 +86,7 @@ export async function deleteDocument(req: AuthRequest, res: Response, next: Next
     if (!doc) return res.status(403).json({ message: 'Only owner can delete' })
 
     await prisma.document.update({ where: { id }, data: { isDeleted: true } })
+    await invalidateDocumentCache(id)
     res.status(204).send()
   } catch (err) {
     next(err)

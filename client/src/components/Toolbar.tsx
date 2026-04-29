@@ -8,6 +8,7 @@ interface ToolbarButton {
   label: string
   action: () => void
   isActive?: boolean
+  disabled?: boolean
 }
 
 export function Toolbar({ editor }: Props) {
@@ -47,10 +48,12 @@ export function Toolbar({ editor }: Props) {
     {
       label: '↩ Undo',
       action: () => editor.chain().focus().undo().run(),
+      disabled: !editor.can().undo(),
     },
     {
       label: '↪ Redo',
       action: () => editor.chain().focus().redo().run(),
+      disabled: !editor.can().redo(),
     },
   ]
 
@@ -60,6 +63,7 @@ export function Toolbar({ editor }: Props) {
         <button
           key={btn.label}
           onClick={btn.action}
+          disabled={btn.disabled}
           style={{
             padding: '4px 8px',
             fontSize: 12,
@@ -67,7 +71,8 @@ export function Toolbar({ editor }: Props) {
             background: btn.isActive ? '#e0e7ff' : '#f5f5f5',
             border: '1px solid #ddd',
             borderRadius: 4,
-            cursor: 'pointer',
+            cursor: btn.disabled ? 'not-allowed' : 'pointer',
+            opacity: btn.disabled ? 0.4 : 1,
           }}
         >
           {btn.label}

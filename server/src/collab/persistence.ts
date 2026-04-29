@@ -14,7 +14,10 @@ redis.on('error', (err) => { //.on() catch error when some error throw
 
 const REDIS_TTL = 60 * 60 * 24 // 24 hours
 const AUTO_SNAPSHOT_DEBOUNCE_MS = 30 * 1000 // 30s
+const CACHE_THROTTLE_MS = 300 // gộp các keystroke trong 300ms thành 1 lệnh ghi Redis
 const snapshotTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const cacheTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingCacheState = new Map<string, Buffer>()
 
 function redisKey(documentId: string) {
   return `yjs:${documentId}`//redis save everything in one place, not have table,so yjs: like virtual folder/collection
@@ -24,7 +27,11 @@ export async function loadDocument(documentId: string): Promise<Buffer | null> {
   // 1. Try Redis cache first
   try {
     const cached = await redis.getBuffer(redisKey(documentId))
-    if (cached) return cached
+    if (cached) {
+      // Refresh TTL: document đang được mở liên tục không bị evict sau 24h kể từ lần ghi đầu.
+      redis.expire(redisKey(documentId), REDIS_TTL).catch(() => { /* non-fatal */ })
+      return cached
+    }
   } catch {
     // Redis unavailable, fall through to DB
   }
@@ -56,6 +63,49 @@ export async function storeDocument(
     where: { id: documentId },
     data: { yjsState: state },
   })
+}
+
+// Gộp nhiều keystroke trong CACHE_THROTTLE_MS thành 1 lần ghi Redis.
+// Lần gọi cuối trong cửa sổ thực sự được flush — đảm bảo Redis luôn giữ state mới nhất.
+export function throttledCacheUpdate(documentId: string, state: Buffer) {
+  pendingCacheState.set(documentId, state)
+  if (cacheTimers.has(documentId)) return
+
+  const timer = setTimeout(async () => {
+    cacheTimers.delete(documentId)
+    const latest = pendingCacheState.get(documentId)
+    pendingCacheState.delete(documentId)
+    if (!latest) return
+    try {
+      await redis.setex(redisKey(documentId), REDIS_TTL, latest)
+    } catch {
+      // Redis unavailable — onStoreDocument sẽ ghi đầy đủ khi disconnect, không mất state.
+    }
+  }, CACHE_THROTTLE_MS)
+
+  cacheTimers.set(documentId, timer)
+}
+
+// Xóa cache + dọn timer khi document bị xóa, tránh state cũ tồn tại 24h.
+export async function invalidateDocumentCache(documentId: string) {
+  const cacheTimer = cacheTimers.get(documentId)
+  if (cacheTimer) {
+    clearTimeout(cacheTimer)
+    cacheTimers.delete(documentId)
+  }
+  pendingCacheState.delete(documentId)
+
+  const snapshotTimer = snapshotTimers.get(documentId)
+  if (snapshotTimer) {
+    clearTimeout(snapshotTimer)
+    snapshotTimers.delete(documentId)
+  }
+
+  try {
+    await redis.del(redisKey(documentId))
+  } catch {
+    // Redis unavailable — chấp nhận, key sẽ tự expire sau TTL.
+  }
 }
 
 export async function createSnapshot(

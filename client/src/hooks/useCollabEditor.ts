@@ -55,5 +55,5 @@ export function useCollabEditor(documentId: string) {
     }
   }, [provider, indexeddbProvider, ydoc])
 
-  return { editor, provider, ydoc }
+  return { editor, provider, ydoc, indexeddbProvider }
 }

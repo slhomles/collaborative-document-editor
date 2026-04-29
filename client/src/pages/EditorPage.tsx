@@ -5,12 +5,13 @@ import { Editor } from '../components/Editor'
 import { UserList } from '../components/UserList'
 import { Toolbar } from '../components/Toolbar'
 import { CollabCursor } from '../components/CollabCursor'
+import { ConnectionStatus } from '../components/ConnectionStatus'
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { editor, provider } = useCollabEditor(id!)
-  const { users, isOnline } = useAwareness(provider)
+  const { editor, provider, indexeddbProvider } = useCollabEditor(id!)
+  const { users, connection } = useAwareness(provider, indexeddbProvider)
 
   return (
     <div style={{ display: 'flex', height: '100vh', flexDirection: 'column' }}>
@@ -18,9 +19,7 @@ export function EditorPage() {
       <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #eee', gap: 12 }}>
         <button onClick={() => navigate('/')}>← Quay lại</button>
         <Toolbar editor={editor} />
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: isOnline ? 'green' : 'gray' }}>
-          {isOnline ? '● Online' : '○ Offline'}
-        </span>
+        <ConnectionStatus connection={connection} />
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
