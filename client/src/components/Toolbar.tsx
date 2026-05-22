@@ -2,6 +2,7 @@ import { Editor } from '@tiptap/react'
 
 interface Props {
   editor: Editor | null
+  readOnly?: boolean
 }
 
 interface ToolbarButton {
@@ -11,7 +12,7 @@ interface ToolbarButton {
   disabled?: boolean
 }
 
-export function Toolbar({ editor }: Props) {
+export function Toolbar({ editor, readOnly = false }: Props) {
   if (!editor) return null
 
   const buttons: ToolbarButton[] = [
@@ -19,50 +20,67 @@ export function Toolbar({ editor }: Props) {
       label: 'B',
       action: () => editor.chain().focus().toggleBold().run(),
       isActive: editor.isActive('bold'),
+      disabled: readOnly,
     },
     {
       label: 'I',
       action: () => editor.chain().focus().toggleItalic().run(),
       isActive: editor.isActive('italic'),
+      disabled: readOnly,
     },
     {
       label: 'H1',
       action: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
       isActive: editor.isActive('heading', { level: 1 }),
+      disabled: readOnly,
     },
     {
       label: 'H2',
       action: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
       isActive: editor.isActive('heading', { level: 2 }),
+      disabled: readOnly,
     },
     {
       label: '• List',
       action: () => editor.chain().focus().toggleBulletList().run(),
       isActive: editor.isActive('bulletList'),
+      disabled: readOnly,
     },
     {
       label: '1. List',
       action: () => editor.chain().focus().toggleOrderedList().run(),
       isActive: editor.isActive('orderedList'),
+      disabled: readOnly,
     },
     {
       label: '↩ Undo',
       action: () => editor.chain().focus().undo().run(),
-      disabled: !editor.can().undo(),
+      disabled: readOnly || !editor.can().undo(),
     },
     {
       label: '↪ Redo',
       action: () => editor.chain().focus().redo().run(),
-      disabled: !editor.can().redo(),
+      disabled: readOnly || !editor.can().redo(),
     },
   ]
 
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      {readOnly && (
+        <span style={{
+          fontSize: 11, fontWeight: 600,
+          background: '#fff3cd', color: '#856404',
+          border: '1px solid #ffc107',
+          borderRadius: 4, padding: '2px 8px',
+          marginRight: 4, whiteSpace: 'nowrap',
+        }}>
+          👁 Chỉ xem
+        </span>
+      )}
       {buttons.map((btn) => (
         <button
           key={btn.label}
-          onClick={btn.action}
+          onClick={btn.disabled ? undefined : btn.action}
           disabled={btn.disabled}
           style={{
             padding: '4px 8px',
@@ -72,7 +90,7 @@ export function Toolbar({ editor }: Props) {
             border: '1px solid #ddd',
             borderRadius: 4,
             cursor: btn.disabled ? 'not-allowed' : 'pointer',
-            opacity: btn.disabled ? 0.4 : 1,
+            opacity: btn.disabled ? 0.35 : 1,
           }}
         >
           {btn.label}

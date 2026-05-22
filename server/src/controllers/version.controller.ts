@@ -33,8 +33,12 @@ export async function createVersion(req: AuthRequest, res: Response, next: NextF
     })
     if (!doc) return res.status(403).json({ message: 'Forbidden' })
 
-    const state = await loadDocument(id)
-    if (!state) return res.status(400).json({ message: 'No document state to snapshot' })
+    let state = await loadDocument(id)
+    if (!state) {
+      const { Doc, encodeStateAsUpdate } = await import('yjs')
+      const emptyDoc = new Doc()
+      state = Buffer.from(encodeStateAsUpdate(emptyDoc))
+    }
 
     const version = await createSnapshot(id, userId, state, label)
     res.status(201).json(version)
