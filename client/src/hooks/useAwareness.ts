@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { WebsocketProvider } from 'y-websocket'
+import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
 
 export interface AwarenessUser {
@@ -15,7 +15,7 @@ export type ConnectionState =
   | 'offline-cached'
 
 export function useAwareness(
-  provider: WebsocketProvider | null,
+  provider: HocuspocusProvider | null,
   indexeddbProvider: IndexeddbPersistence | null = null,
 ) {
   const [users, setUsers] = useState<AwarenessUser[]>([])
@@ -38,8 +38,11 @@ export function useAwareness(
   useEffect(() => {
     if (!provider) return
 
+    const awareness = provider.awareness
+
     function updateUsers() {
-      const states = Array.from(provider!.awareness.getStates().entries())
+      if (!awareness) return
+      const states = Array.from(awareness.getStates().entries())
       const list: AwarenessUser[] = states
         .filter(([, state]) => state.user)
         .map(([clientId, state]) => ({ clientId, ...state.user }))
@@ -47,20 +50,20 @@ export function useAwareness(
     }
 
     function handleStatus({ status }: { status: string }) {
-      // y-websocket phát ra: 'connecting' | 'connected' | 'disconnected'
+      // HocuspocusProvider phát ra: 'connecting' | 'connected' | 'disconnected'
       if (status === 'connected') setConnection('connected')
       else if (status === 'connecting') setConnection('connecting')
       else setConnection('disconnected')
     }
 
-    provider.awareness.on('change', updateUsers)
+    awareness?.on('change', updateUsers)
     provider.on('status', handleStatus)
     // Sync initial state phòng trường hợp provider đã connect xong trước khi effect chạy.
-    setConnection(provider.wsconnected ? 'connected' : 'connecting')
+    setConnection(provider.isConnected ? 'connected' : 'connecting')
     updateUsers()
 
     return () => {
-      provider.awareness.off('change', updateUsers)
+      awareness?.off('change', updateUsers)
       provider.off('status', handleStatus)
     }
   }, [provider])

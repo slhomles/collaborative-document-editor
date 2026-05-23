@@ -64,6 +64,7 @@ model DocumentVersion {
   createdBy     String   @map("created_by")
   yjsSnapshot   Bytes    @map("yjs_snapshot")  // snapshot Yjs tại thời điểm này
   label         String?                         // tên version tuỳ chọn: "v1.0", "Bản nháp"
+  isAuto        Boolean  @default(true) @map("is_auto")  // true = auto-snapshot; false = bản lưu thủ công (đặt tên), không bị prune
   versionNumber Int      @default(autoincrement()) @map("version_number")
   createdAt     DateTime @default(now()) @map("created_at")
 

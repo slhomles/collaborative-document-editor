@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import * as Y from 'yjs'
-import { WebsocketProvider } from 'y-websocket'
+import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -16,15 +16,25 @@ function randomColor() {
   return COLORS[Math.floor(Math.random() * COLORS.length)]
 }
 
-export function useCollabEditor(documentId: string) {
+interface UseCollabEditorOptions {
+  editable?: boolean
+}
+
+export function useCollabEditor(documentId: string, options: UseCollabEditorOptions = {}) {
+  const { editable = true } = options
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.token)
 
   const ydoc = useMemo(() => new Y.Doc(), [documentId])
 
+  // Hocuspocus 2.x đa hợp document trên một kết nối: mỗi message gắn tiền tố tên document.
+  // Phải dùng HocuspocusProvider (không phải y-websocket) để khớp giao thức của server.
   const provider = useMemo(() => {
-    return new WebsocketProvider(WS_URL, documentId, ydoc, {
-      params: { token: token || '' },
+    return new HocuspocusProvider({
+      url: WS_URL,
+      name: documentId,
+      document: ydoc,
+      token: token || '',
     })
   }, [documentId, ydoc, token])
 
@@ -34,6 +44,7 @@ export function useCollabEditor(documentId: string) {
   }, [documentId, ydoc])
 
   const editor = useEditor({
+    editable,
     extensions: [
       StarterKit.configure({ history: false }),
       Collaboration.configure({ document: ydoc }),
@@ -46,6 +57,11 @@ export function useCollabEditor(documentId: string) {
       }),
     ],
   })
+
+  // Phản ánh role thay đổi (FE nhận role async sau khi mount).
+  useEffect(() => {
+    editor?.setEditable(editable)
+  }, [editor, editable])
 
   useEffect(() => {
     return () => {

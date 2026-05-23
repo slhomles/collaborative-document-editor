@@ -17,3 +17,50 @@ body {
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
 }
+
+/* Highlight diff khi xem phiên bản: chữ thêm nền xanh, chữ xóa gạch ngang đỏ. */
+.diff-added {
+  background: #e6ffec;
+  border-radius: 2px;
+}
+.diff-deleted {
+  color: #cf222e;
+  text-decoration: line-through;
+  background: #ffebe9;
+  border-radius: 2px;
+}
+
+/* Diff theo khối/đoạn trong chế độ Lịch sử phiên bản. */
+.diff-added-block {
+  background: #e6ffec;
+  border-radius: 3px;
+  box-shadow: inset 3px 0 0 #2da44e;
+  padding-left: 6px;
+}
+.diff-deleted-block {
+  background: #ffebe9;
+  color: #cf222e;
+  text-decoration: line-through;
+  border-radius: 3px;
+  box-shadow: inset 3px 0 0 #cf222e;
+  padding: 2px 6px;
+  margin: 4px 0;
+}
+.diff-anchor-flash {
+  animation: diff-flash 1.2s ease-out;
+}
+@keyframes diff-flash {
+  0% { background: #fde68a; }
+  100% { background: transparent; }
+}
+
+/* Vùng xem nội dung version (full size, như trang soạn thảo). */
+.version-diff .ProseMirror {
+  outline: none;
+  min-height: 400px;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.version-diff .ProseMirror p { margin: 0 0 8px; }
+.version-diff .ProseMirror h1 { font-size: 2em; margin: 16px 0 8px; }
+.version-diff .ProseMirror h2 { font-size: 1.5em; margin: 12px 0 6px; }

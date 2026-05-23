@@ -53,7 +53,14 @@ export async function getDocument(req: AuthRequest, res: Response, next: NextFun
       },
     })
     if (!doc) return res.status(404).json({ message: 'Document not found' })
-    res.json(doc)
+
+    // Tính role hiện tại của user trong document để FE biết có được edit / restore không.
+    const currentUserRole: Role =
+      doc.ownerId === userId
+        ? Role.OWNER
+        : doc.members.find((m) => m.userId === userId)?.role ?? Role.VIEWER
+
+    res.json({ ...doc, currentUserRole })
   } catch (err) {
     next(err)
   }

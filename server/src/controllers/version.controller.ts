@@ -36,7 +36,8 @@ export async function createVersion(req: AuthRequest, res: Response, next: NextF
     const state = await loadDocument(id)
     if (!state) return res.status(400).json({ message: 'No document state to snapshot' })
 
-    const version = await createSnapshot(id, userId, state, label)
+    // Bản lưu thủ công: isAuto=false → không bị prune.
+    const version = await createSnapshot(id, userId, state, label, false)
     res.status(201).json(version)
   } catch (err) {
     next(err)
