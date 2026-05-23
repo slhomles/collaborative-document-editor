@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { WebsocketProvider } from 'y-websocket'
+import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
 
 export interface AwarenessUser {
@@ -15,7 +15,7 @@ export type ConnectionState =
   | 'offline-cached'
 
 export function useAwareness(
-  provider: WebsocketProvider | null,
+  provider: HocuspocusProvider | null,
   indexeddbProvider: IndexeddbPersistence | null = null,
 ) {
   const [users, setUsers] = useState<AwarenessUser[]>([])
@@ -39,7 +39,7 @@ export function useAwareness(
     if (!provider) return
 
     function updateUsers() {
-      const states = Array.from(provider!.awareness.getStates().entries())
+      const states = Array.from(provider!.awareness?.getStates().entries() ?? [])
       const list: AwarenessUser[] = states
         .filter(([, state]) => state.user)
         .map(([clientId, state]) => ({ clientId, ...state.user }))
@@ -53,14 +53,14 @@ export function useAwareness(
       else setConnection('disconnected')
     }
 
-    provider.awareness.on('change', updateUsers)
+    provider.awareness?.on('change', updateUsers)
     provider.on('status', handleStatus)
     // Sync initial state phòng trường hợp provider đã connect xong trước khi effect chạy.
-    setConnection(provider.wsconnected ? 'connected' : 'connecting')
+    setConnection(provider.isConnected ? 'connected' : 'connecting')
     updateUsers()
 
     return () => {
-      provider.awareness.off('change', updateUsers)
+      provider.awareness?.off('change', updateUsers)
       provider.off('status', handleStatus)
     }
   }, [provider])

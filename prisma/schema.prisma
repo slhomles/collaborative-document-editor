@@ -31,6 +31,8 @@ model Document {
   yjsState       Bytes?   @map("yjs_state")       // Yjs binary state từ Hocuspocus
   contentPreview String?  @map("content_preview")  // Text thuần để search
   isDeleted      Boolean  @default(false) @map("is_deleted")
+  publicRole     String   @default("RESTRICTED") @map("public_role")
+  editorsCanShare Boolean  @default(true) @map("editors_can_share")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

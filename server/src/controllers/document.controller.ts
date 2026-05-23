@@ -45,10 +45,14 @@ export async function getDocument(req: AuthRequest, res: Response, next: NextFun
       where: {
         id,
         isDeleted: false,
-        OR: [{ ownerId: userId }, { members: { some: { userId } } }],
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId } } },
+          { publicRole: { in: ['VIEWER', 'EDITOR'] } }
+        ],
       },
       include: {
-        owner: { select: { id: true, name: true } },
+        owner: { select: { id: true, name: true, email: true } },
         members: { include: { user: { select: { id: true, name: true, email: true } } } },
       },
     })
@@ -64,13 +68,41 @@ export async function updateDocument(req: AuthRequest, res: Response, next: Next
     const { id } = req.params
     const userId = req.userId!
     const doc = await prisma.document.findFirst({
-      where: { id, OR: [{ ownerId: userId }, { members: { some: { userId, role: Role.EDITOR } } }] },
+      where: { id, isDeleted: false },
     })
-    if (!doc) return res.status(403).json({ message: 'Forbidden' })
+    if (!doc) return res.status(404).json({ message: 'Document not found' })
+
+    const isOwner = doc.ownerId === userId
+    const isEditor = await prisma.documentMember.findFirst({
+      where: { documentId: id, userId, role: Role.EDITOR },
+    })
+
+    const { title, publicRole, editorsCanShare } = req.body
+
+    // Authorization checks:
+    // 1. Changing publicRole or editorsCanShare is OWNER-only
+    if ((publicRole !== undefined || editorsCanShare !== undefined) && !isOwner) {
+      return res.status(403).json({ message: 'Only the owner can change sharing configurations' })
+    }
+
+    // 2. Changing title is OWNER or EDITOR only
+    if (title !== undefined && !isOwner && !isEditor) {
+      return res.status(403).json({ message: 'Forbidden' })
+    }
+
+    const dataToUpdate: any = {}
+    if (title !== undefined) dataToUpdate.title = title
+    if (editorsCanShare !== undefined) dataToUpdate.editorsCanShare = editorsCanShare
+    if (publicRole !== undefined) {
+      if (!['RESTRICTED', 'VIEWER', 'EDITOR'].includes(publicRole)) {
+        return res.status(400).json({ message: 'Invalid public role' })
+      }
+      dataToUpdate.publicRole = publicRole
+    }
 
     const updated = await prisma.document.update({
       where: { id },
-      data: { title: req.body.title },
+      data: dataToUpdate,
     })
     res.json(updated)
   } catch (err) {

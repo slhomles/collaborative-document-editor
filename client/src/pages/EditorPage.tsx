@@ -16,7 +16,7 @@ export function EditorPage() {
   const navigate = useNavigate()
   const { editor, provider, indexeddbProvider } = useCollabEditor(id!)
   const { users, connection } = useAwareness(provider, indexeddbProvider)
-  const { doc, role, canEdit, isOwner, refreshDoc } = useDocumentRole(id!)
+  const { doc, role: _role, canEdit, isOwner, refreshDoc } = useDocumentRole(id!)
   const [showShare, setShowShare] = useState(false)
 
   // Sync Tiptap editable state with user's role
@@ -24,6 +24,14 @@ export function EditorPage() {
     if (!editor) return
     editor.setEditable(canEdit)
   }, [editor, canEdit])
+
+  // Reconnect Hocuspocus provider when permissions change to force WebSocket re-authentication with new readOnly state
+  useEffect(() => {
+    if (!provider) return
+    console.log('[EditorPage] canEdit changed, reconnecting provider:', canEdit)
+    provider.disconnect()
+    provider.connect()
+  }, [canEdit, provider])
 
   return (
     <div style={{ display: 'flex', height: '100vh', flexDirection: 'column' }}>

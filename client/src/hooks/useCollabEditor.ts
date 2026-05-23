@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import * as Y from 'yjs'
-import { WebsocketProvider } from 'y-websocket'
+import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -23,8 +23,12 @@ export function useCollabEditor(documentId: string) {
   const ydoc = useMemo(() => new Y.Doc(), [documentId])
 
   const provider = useMemo(() => {
-    return new WebsocketProvider(WS_URL, documentId, ydoc, {
-      params: { token: token || '' },
+    return new HocuspocusProvider({
+      url: WS_URL,
+      name: documentId,
+      document: ydoc,
+      token: token || '',
+      broadcast: false,
     })
   }, [documentId, ydoc, token])
 

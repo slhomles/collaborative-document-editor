@@ -11,11 +11,13 @@ export interface Member {
   user: { id: string; name: string; email: string }
 }
 
-interface DocDetail {
+export interface DocDetail {
   id: string
   title: string
   ownerId: string
-  owner: { id: string; name: string }
+  publicRole: 'RESTRICTED' | 'VIEWER' | 'EDITOR'
+  editorsCanShare: boolean
+  owner: { id: string; name: string; email?: string }
   members: Member[]
 }
 
@@ -37,7 +39,13 @@ export function useDocumentRole(documentId: string) {
         setRole('OWNER')
       } else {
         const membership = data.members.find((m) => m.userId === currentUser.id)
-        setRole(membership ? membership.role : null)
+        if (membership) {
+          setRole(membership.role)
+        } else if (data.publicRole && data.publicRole !== 'RESTRICTED') {
+          setRole(data.publicRole)
+        } else {
+          setRole(null)
+        }
       }
     } catch (err) {
       console.error('Failed to fetch document', err)
@@ -48,6 +56,9 @@ export function useDocumentRole(documentId: string) {
 
   useEffect(() => {
     fetchDoc()
+    // Poll every 5 seconds to dynamically reflect permissions changes
+    const interval = setInterval(fetchDoc, 5000)
+    return () => clearInterval(interval)
   }, [documentId])
 
   const canEdit = role === 'OWNER' || role === 'EDITOR'

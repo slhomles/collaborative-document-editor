@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express'
 import { PrismaClient, Role } from '@prisma/client'
+import * as Y from 'yjs'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { loadDocument, createSnapshot, listSnapshots, getSnapshot } from '../collab/persistence'
 
@@ -11,7 +12,15 @@ export async function listVersions(req: AuthRequest, res: Response, next: NextFu
     const userId = req.userId!
 
     const doc = await prisma.document.findFirst({
-      where: { id, isDeleted: false, OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
+      where: {
+        id,
+        isDeleted: false,
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId } } },
+          { publicRole: { in: ['VIEWER', 'EDITOR'] } }
+        ]
+      },
     })
     if (!doc) return res.status(404).json({ message: 'Document not found' })
 
@@ -35,9 +44,8 @@ export async function createVersion(req: AuthRequest, res: Response, next: NextF
 
     let state = await loadDocument(id)
     if (!state) {
-      const { Doc, encodeStateAsUpdate } = await import('yjs')
-      const emptyDoc = new Doc()
-      state = Buffer.from(encodeStateAsUpdate(emptyDoc))
+      const emptyDoc = new Y.Doc()
+      state = Buffer.from(Y.encodeStateAsUpdate(emptyDoc))
     }
 
     const version = await createSnapshot(id, userId, state, label)
@@ -53,7 +61,15 @@ export async function getVersion(req: AuthRequest, res: Response, next: NextFunc
     const userId = req.userId!
 
     const doc = await prisma.document.findFirst({
-      where: { id, isDeleted: false, OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
+      where: {
+        id,
+        isDeleted: false,
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId } } },
+          { publicRole: { in: ['VIEWER', 'EDITOR'] } }
+        ]
+      },
     })
     if (!doc) return res.status(404).json({ message: 'Document not found' })
 
