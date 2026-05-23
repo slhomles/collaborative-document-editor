@@ -35,6 +35,7 @@ export function useCollabEditor(documentId: string, options: UseCollabEditorOpti
       name: documentId,
       document: ydoc,
       token: token || '',
+      broadcast: false,
     })
   }, [documentId, ydoc, token])
 

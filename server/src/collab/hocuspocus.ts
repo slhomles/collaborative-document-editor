@@ -1,66 +1,81 @@
 import { Server } from '@hocuspocus/server'
 import { Role } from '@prisma/client'
 import jwt from 'jsonwebtoken'
+import * as Y from 'yjs'
 import {
   loadDocument,
   storeDocument,
   scheduleAutoSnapshot,
   flushSnapshotOnStore,
   throttledCacheUpdate,
-  getDocumentRole,
 } from './persistence'
+import { canEditDocument, getDocumentRole } from '../utils/documentAccess'
+
+type CollabContext = {
+  userId?: string
+  documentId?: string
+  role?: Role
+}
 
 export const hocuspocusServer = Server.configure({
-  //verify if a user can edit a document or not
+  // Xác thực + phân quyền (chia sẻ / chỉ đọc).
   async onAuthenticate({ token, documentName, connection }) {
     if (!token) throw new Error('Missing token')
 
-    let userId: string
+    let payload: { userId: string }
     try {
-      const payload = jwt.verify(token, process.env.JWT_SECRET || 'secret') as { userId: string }
-      userId = payload.userId
+      payload = jwt.verify(token, process.env.JWT_SECRET || 'secret') as { userId: string }
     } catch {
       throw new Error('Invalid token')
     }
 
-    const role = await getDocumentRole(userId, documentName)
-    if (!role) throw new Error('Forbidden') // không phải owner cũng không phải member
+    const role = await getDocumentRole(documentName, payload.userId)
+    if (!role) throw new Error('Forbidden')
 
-    // VIEWER chỉ đọc — Hocuspocus tự reject sync update messages khi readOnly = true.
-    connection.readOnly = role === Role.VIEWER
+    // VIEWER (hoặc public chỉ-xem) → readOnly; Hocuspocus tự reject sync update messages.
+    connection.readOnly = !canEditDocument(role)
 
-    return { userId, documentId: documentName, role }
+    return { userId: payload.userId, documentId: documentName, role }
   },
-  // check if a document has content or not
+  // Re-check quyền trên từng message để phản ánh thay đổi chia sẻ realtime.
+  async beforeHandleMessage({ connection, documentName }) {
+    const context = connection.context as CollabContext
+    if (!context.userId) throw new Error('Unauthenticated')
+
+    const role = await getDocumentRole(documentName, context.userId)
+    if (!role) throw new Error('Forbidden')
+
+    connection.readOnly = !canEditDocument(role)
+    connection.context = {
+      ...connection.context,
+      documentId: documentName,
+      role,
+    }
+  },
+  // Nạp state đã lưu (Redis → Postgres) vào document khi mở.
   async onLoadDocument({ documentName, document }) {
     const state = await loadDocument(documentName)
     if (state) {
-      const { applyUpdate } = await import('yjs')// dynamic import, only import if really vital
-      applyUpdate(document, state)// Apply persisted Yjs state to the document
+      Y.applyUpdate(document, state)
     }
     return document
   },
-  // save a doc to database and redis
+  // Lưu document xuống DB + Redis; Hocuspocus gọi khi client cuối ngắt kết nối.
   async onStoreDocument({ documentName, document }) {
-    const { encodeStateAsUpdate } = await import('yjs')
-    const state = Buffer.from(encodeStateAsUpdate(document))
+    const state = Buffer.from(Y.encodeStateAsUpdate(document))
     await storeDocument(documentName, state)
-    // Hocuspocus gọi onStoreDocument khi client cuối ngắt kết nối → chốt bản version cuối phiên.
+    // Chốt bản version cuối phiên (auto-version kiểu Google Docs).
     await flushSnapshotOnStore(documentName)
   },
-  //only save to cache-redis, you can't save everytime user type a character
-  //advantage: loss internet, other people can see quickly, sync
+  // Mỗi thay đổi: cache Redis (throttle) + lên lịch auto-snapshot.
   async onChange({ documentName, document, context }) {
-    const { userId, role } = context as { userId?: string; role?: Role }
-    // VIEWER không bao giờ tới đây vì readOnly chặn ở tầng connection, nhưng phòng vệ kép.
-    if (role === Role.VIEWER) return
+    const collabContext = context as CollabContext
 
-    const { encodeStateAsUpdate } = await import('yjs')
-    const state = Buffer.from(encodeStateAsUpdate(document))
+    const state = Buffer.from(Y.encodeStateAsUpdate(document))
     // Throttle 300ms để tránh ghi Redis trên mỗi keystroke; flush tự động.
     throttledCacheUpdate(documentName, state)
 
-    // Schedule auto-snapshot every 30s of inactivity — chỉ user có quyền ghi.
-    if (userId) scheduleAutoSnapshot(documentName, userId, state)
+    // Auto-snapshot khi nhàn rỗi / định kỳ — chỉ user có quyền ghi.
+    if (collabContext.userId) scheduleAutoSnapshot(documentName, collabContext.userId, state)
   },
 })

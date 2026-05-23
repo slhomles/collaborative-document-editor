@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express'
 import { PrismaClient, Role } from '@prisma/client'
+import * as Y from 'yjs'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { loadDocument, createSnapshot, listSnapshots, getSnapshot } from '../collab/persistence'
 
@@ -11,7 +12,15 @@ export async function listVersions(req: AuthRequest, res: Response, next: NextFu
     const userId = req.userId!
 
     const doc = await prisma.document.findFirst({
-      where: { id, isDeleted: false, OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
+      where: {
+        id,
+        isDeleted: false,
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId } } },
+          { publicRole: { in: ['VIEWER', 'EDITOR'] } }
+        ]
+      },
     })
     if (!doc) return res.status(404).json({ message: 'Document not found' })
 
@@ -33,8 +42,11 @@ export async function createVersion(req: AuthRequest, res: Response, next: NextF
     })
     if (!doc) return res.status(403).json({ message: 'Forbidden' })
 
-    const state = await loadDocument(id)
-    if (!state) return res.status(400).json({ message: 'No document state to snapshot' })
+    let state = await loadDocument(id)
+    if (!state) {
+      const emptyDoc = new Y.Doc()
+      state = Buffer.from(Y.encodeStateAsUpdate(emptyDoc))
+    }
 
     // Bản lưu thủ công: isAuto=false → không bị prune.
     const version = await createSnapshot(id, userId, state, label, false)
@@ -50,7 +62,15 @@ export async function getVersion(req: AuthRequest, res: Response, next: NextFunc
     const userId = req.userId!
 
     const doc = await prisma.document.findFirst({
-      where: { id, isDeleted: false, OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
+      where: {
+        id,
+        isDeleted: false,
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId } } },
+          { publicRole: { in: ['VIEWER', 'EDITOR'] } }
+        ]
+      },
     })
     if (!doc) return res.status(404).json({ message: 'Document not found' })
 

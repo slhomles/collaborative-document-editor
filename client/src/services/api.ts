@@ -40,7 +40,7 @@ export const documentApi = {
   create: (title?: string) => api.post('/documents', { title }),
   search: (q: string) => api.get(`/documents/search`, { params: { q } }),
   get: (id: string) => api.get(`/documents/${id}`),
-  update: (id: string, title: string) => api.patch(`/documents/${id}`, { title }),
+  update: (id: string, data: { title?: string; publicRole?: 'RESTRICTED' | 'VIEWER' | 'EDITOR'; editorsCanShare?: boolean }) => api.patch(`/documents/${id}`, data),
   delete: (id: string) => api.delete(`/documents/${id}`),
   addMember: (id: string, email: string, role: string) =>
     api.post(`/documents/${id}/members`, { email, role }),
