@@ -36,8 +36,8 @@ const CACHE_THROTTLE_MS = 300 // gộp các keystroke trong 300ms thành 1 lện
 
 // Auto-version kiểu Google Docs: chốt checkpoint khi ngừng gõ (idle) HOẶC tối đa mỗi maxWait
 // dù gõ liên tục, cộng thêm 1 bản chốt khi đóng doc (flushSnapshotOnStore).
-const AUTO_IDLE_MS = 20 * 1000 // chốt sau 20s ngừng gõ
-const AUTO_MAX_WAIT_MS = 2 * 60 * 1000 // vẫn chốt sau tối đa 2 phút dù đang gõ liên tục
+const AUTO_IDLE_MS = 2 * 60 * 1000 // chốt sau 2 phút ngừng gõ
+const AUTO_MAX_WAIT_MS = 10 * 60 * 1000 // vẫn chốt sau tối đa 10 phút dù đang gõ liên tục
 
 const snapshotTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const cacheTimers = new Map<string, ReturnType<typeof setTimeout>>()

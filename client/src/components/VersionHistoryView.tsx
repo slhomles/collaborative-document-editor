@@ -50,6 +50,25 @@ export function VersionHistoryView({ documentId, editor, canRestore, onClose }: 
   const [loading, setLoading] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
+  const daysInitRef = useRef(false)
+
+  function toggleDay(day: string) {
+    setExpandedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(day)) next.delete(day)
+      else next.add(day)
+      return next
+    })
+  }
+
+  // Mặc định mở nhóm ngày mới nhất (Hôm nay) một lần khi có dữ liệu.
+  useEffect(() => {
+    if (!daysInitRef.current && versions.length > 0) {
+      setExpandedDays(new Set([dayGroupLabel(versions[0].createdAt)]))
+      daysInitRef.current = true
+    }
+  }, [versions])
 
   // Cache JSON đã trích theo versionId để khỏi fetch + parse lại.
   const jsonCache = useRef<Map<string, JSONContent>>(new Map())
@@ -199,11 +218,18 @@ export function VersionHistoryView({ documentId, editor, canRestore, onClose }: 
             <div style={{ fontSize: 13, fontWeight: 600 }}>Phiên bản hiện tại</div>
           </button>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-            {grouped.map(([day, items]) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            {grouped.map(([day, items]) => {
+              const open = expandedDays.has(day)
+              return (
               <div key={day}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', margin: '4px 0 6px' }}>{day}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <button onClick={() => toggleDay(day)} style={dayHeaderStyle()}>
+                  <span style={{ width: 14, display: 'inline-block' }}>{open ? '▾' : '▸'}</span>
+                  <span style={{ flex: 1, textAlign: 'left' }}>{day}</span>
+                  <span style={{ color: '#9ca3af', fontWeight: 400 }}>({items.length})</span>
+                </button>
+                {open && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
                   {items.map((v) => (
                     <button key={v.id} onClick={() => setSelectedKey(v.id)} style={itemStyle(selectedKey === v.id)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
@@ -222,8 +248,10 @@ export function VersionHistoryView({ documentId, editor, canRestore, onClose }: 
                     </button>
                   ))}
                 </div>
+                )}
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>
@@ -243,6 +271,23 @@ function groupByDay(versions: VersionListItem[]): [string, VersionListItem[]][] 
     groups.get(key)!.push(v)
   }
   return Array.from(groups.entries())
+}
+
+function dayHeaderStyle(): React.CSSProperties {
+  return {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '6px 8px',
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#374151',
+    background: '#f3f4f6',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    cursor: 'pointer',
+  }
 }
 
 function itemStyle(active: boolean): React.CSSProperties {
