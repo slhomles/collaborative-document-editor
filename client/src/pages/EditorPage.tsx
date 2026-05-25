@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useCollabEditor } from '../hooks/useCollabEditor'
 import { useAwareness } from '../hooks/useAwareness'
 import { useDocumentRole } from '../hooks/useDocumentRole'
+import { documentApi } from '../services/api'
 import { Editor } from '../components/Editor'
 import { UserList } from '../components/UserList'
 import { Toolbar } from '../components/Toolbar'
@@ -22,7 +23,33 @@ export function EditorPage() {
   const [showShare, setShowShare] = useState(false)
 
   // Quyền truy cập (chia sẻ / chỉ đọc) — nguồn chân lý cho khả năng chỉnh sửa.
-  const { doc, canEdit, isOwner, refreshDoc } = useDocumentRole(id!)
+  const { doc, setDoc, canEdit, isOwner, refreshDoc } = useDocumentRole(id!)
+
+  async function handleToggleStar() {
+    if (!doc) return
+    const currentlyStarred = !!doc.isStarred
+
+    // Optimistic UI update
+    setDoc({
+      ...doc,
+      isStarred: !currentlyStarred
+    })
+
+    try {
+      if (currentlyStarred) {
+        await documentApi.unstar(doc.id)
+      } else {
+        await documentApi.star(doc.id)
+      }
+    } catch (err) {
+      console.error('Failed to toggle star:', err)
+      // Rollback on error
+      setDoc({
+        ...doc,
+        isStarred: currentlyStarred
+      })
+    }
+  }
   const { editor, provider, indexeddbProvider } = useCollabEditor(id!, { editable: canEdit })
   const { users, connection } = useAwareness(provider, indexeddbProvider)
 
@@ -38,6 +65,15 @@ export function EditorPage() {
     provider.disconnect()
     provider.connect()
   }, [canEdit, provider])
+
+  // Ghi nhận lượt xem tài liệu khi mở trang (Chuẩn Google Drive)
+  useEffect(() => {
+    if (id) {
+      documentApi.view(id).catch((err) => {
+        console.error('Failed to log document view activity:', err)
+      })
+    }
+  }, [id])
 
   const canRestore = canEdit
 
@@ -71,12 +107,42 @@ export function EditorPage() {
         </button>
 
         {doc && (
-          <span style={{
-            fontSize: 15, fontWeight: 600, color: '#1a1a1a',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 240,
-          }}>
-            {doc.title}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{
+              fontSize: 15, fontWeight: 600, color: '#1a1a1a',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 240,
+            }}>
+              {doc.title}
+            </span>
+            <button
+              onClick={handleToggleStar}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: doc.isStarred ? 1 : 0.4,
+                transition: 'opacity 0.15s, transform 0.1s',
+                borderRadius: 4,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '1'
+                e.currentTarget.style.transform = 'scale(1.15)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = doc.isStarred ? '1' : '0.4'
+                e.currentTarget.style.transform = 'scale(1)'
+              }}
+              title={doc.isStarred ? 'Bỏ gắn dấu sao' : 'Gắn dấu sao'}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={doc.isStarred ? '#fbbf24' : 'none'} stroke={doc.isStarred ? '#fbbf24' : '#666'} strokeWidth="1.75">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499c.196-.4.778-.4 0-.8l1.384 2.802a1.24 1.24 0 0 0 .935.68l3.093.45c.44.064.616.606.297.918l-2.237 2.182a1.24 1.24 0 0 0-.356 1.096l.528 3.08c.075.44-.39.777-.788.57l-2.766-1.455a1.24 1.24 0 0 0-1.148 0l-2.766 1.455c-.398.207-.863-.13-.788-.57l.528-3.08a1.24 1.24 0 0 0-.356-1.096L3.89 9.549c-.319-.312-.143-.854.297-.918l3.093-.45a1.24 1.24 0 0 0 .935-.68L9.5 3.499c.197-.4.78-.4.98 0z" />
+              </svg>
+            </button>
+          </div>
         )}
 
         <Toolbar editor={editor} readOnly={!canEdit} />

@@ -84,3 +84,14 @@ export async function getMe(req: AuthRequest, res: Response, next: NextFunction)
     next(err)
   }
 }
+
+export async function listUsers(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, email: true, name: true, avatarUrl: true },
+    })
+    res.json({ data: users })
+  } catch (err) {
+    next(err)
+  }
+}

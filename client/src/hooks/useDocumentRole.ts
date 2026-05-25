@@ -19,6 +19,7 @@ export interface DocDetail {
   editorsCanShare: boolean
   owner: { id: string; name: string; email?: string }
   members: Member[]
+  isStarred?: boolean
 }
 
 export function useDocumentRole(documentId: string) {
@@ -64,5 +65,5 @@ export function useDocumentRole(documentId: string) {
   const canEdit = role === 'OWNER' || role === 'EDITOR'
   const isOwner = role === 'OWNER'
 
-  return { doc, role, loading, canEdit, isOwner, refreshDoc: fetchDoc }
+  return { doc, setDoc, role, loading, canEdit, isOwner, refreshDoc: fetchDoc }
 }

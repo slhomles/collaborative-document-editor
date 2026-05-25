@@ -15,10 +15,42 @@ export async function listDocuments(req: AuthRequest, res: Response, next: NextF
           { members: { some: { userId } } },
         ],
       },
-      select: { id: true, title: true, createdAt: true, updatedAt: true, owner: { select: { name: true } } },
+      select: {
+        id: true,
+        title: true,
+        ownerId: true,
+        createdAt: true,
+        updatedAt: true,
+        publicRole: true,
+        owner: { select: { name: true } },
+        starredDocs: {
+          where: { userId },
+          select: { id: true }
+        },
+        viewedDocs: {
+          where: { userId },
+          select: { viewedAt: true }
+        },
+        members: {
+          select: {
+            userId: true
+          }
+        }
+      },
       orderBy: { updatedAt: 'desc' },
     })
-    res.json(docs)
+
+    const mapped = docs.map(doc => {
+      const { starredDocs, viewedDocs, members, ...rest } = doc
+      return {
+        ...rest,
+        isStarred: starredDocs.length > 0,
+        viewedAt: viewedDocs[0]?.viewedAt || null,
+        memberIds: members.map(m => m.userId)
+      }
+    })
+
+    res.json(mapped)
   } catch (err) {
     next(err)
   }
@@ -54,9 +86,16 @@ export async function getDocument(req: AuthRequest, res: Response, next: NextFun
       include: {
         owner: { select: { id: true, name: true, email: true } },
         members: { include: { user: { select: { id: true, name: true, email: true } } } },
+        starredDocs: {
+          where: { userId },
+          select: { id: true }
+        }
       },
     })
     if (!doc) return res.status(404).json({ message: 'Document not found' })
+
+    const { starredDocs, ...docData } = doc
+    const isStarred = starredDocs.length > 0
 
     // Tính role hiện tại của user trong document để FE biết có được edit / restore không.
     const currentUserRole: Role =
@@ -64,7 +103,7 @@ export async function getDocument(req: AuthRequest, res: Response, next: NextFun
         ? Role.OWNER
         : doc.members.find((m) => m.userId === userId)?.role ?? Role.VIEWER
 
-    res.json({ ...doc, currentUserRole })
+    res.json({ ...docData, currentUserRole, isStarred })
   } catch (err) {
     next(err)
   }
@@ -144,10 +183,114 @@ export async function searchDocuments(req: AuthRequest, res: Response, next: Nex
         contentPreview: { contains: q, mode: 'insensitive' },
         OR: [{ ownerId: userId }, { members: { some: { userId } } }],
       },
-      select: { id: true, title: true, createdAt: true, updatedAt: true, owner: { select: { name: true } } },
+      select: {
+        id: true,
+        title: true,
+        ownerId: true,
+        createdAt: true,
+        updatedAt: true,
+        publicRole: true,
+        owner: { select: { name: true } },
+        starredDocs: {
+          where: { userId },
+          select: { id: true }
+        },
+        viewedDocs: {
+          where: { userId },
+          select: { viewedAt: true }
+        },
+        members: {
+          select: {
+            userId: true
+          }
+        }
+      },
       orderBy: { updatedAt: 'desc' },
     })
-    res.json(docs)
+
+    const mapped = docs.map(doc => {
+      const { starredDocs, viewedDocs, members, ...rest } = doc
+      return {
+        ...rest,
+        isStarred: starredDocs.length > 0,
+        viewedAt: viewedDocs[0]?.viewedAt || null,
+        memberIds: members.map(m => m.userId)
+      }
+    })
+
+    res.json(mapped)
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function starDocument(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const userId = req.userId!
+
+    const doc = await prisma.document.findFirst({
+      where: {
+        id,
+        isDeleted: false,
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId } } },
+          { publicRole: { in: ['VIEWER', 'EDITOR'] } }
+        ]
+      }
+    })
+    if (!doc) return res.status(404).json({ message: 'Document not found' })
+
+    const starred = await prisma.starredDocument.upsert({
+      where: { documentId_userId: { documentId: id, userId } },
+      create: { documentId: id, userId },
+      update: {}
+    })
+    res.json({ message: 'Document starred successfully', starred })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function unstarDocument(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const userId = req.userId!
+
+    await prisma.starredDocument.deleteMany({
+      where: { documentId: id, userId }
+    })
+    res.json({ message: 'Document unstarred successfully' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function viewDocument(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params
+    const userId = req.userId!
+
+    const doc = await prisma.document.findFirst({
+      where: {
+        id,
+        isDeleted: false,
+        OR: [
+          { ownerId: userId },
+          { members: { some: { userId } } },
+          { publicRole: { in: ['VIEWER', 'EDITOR'] } }
+        ]
+      }
+    })
+    if (!doc) return res.status(404).json({ message: 'Document not found' })
+
+    const viewed = await prisma.documentViewed.upsert({
+      where: { documentId_userId: { documentId: id, userId } },
+      create: { documentId: id, userId },
+      update: { viewedAt: new Date() }
+    })
+    res.json({ message: 'Document view registered successfully', viewed })
   } catch (err) {
     next(err)
   }

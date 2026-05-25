@@ -32,6 +32,7 @@ export const authApi = {
   register: (name: string, email: string, password: string) =>
     api.post<AuthResponse>('/auth/register', { name, email, password }),
   me: () => api.get<{ data: AuthUser }>('/auth/me'),
+  users: () => api.get<{ data: { id: string; name: string; email: string }[] }>('/auth/users'),
 }
 
 // Documents
@@ -42,6 +43,9 @@ export const documentApi = {
   get: (id: string) => api.get(`/documents/${id}`),
   update: (id: string, data: { title?: string; publicRole?: 'RESTRICTED' | 'VIEWER' | 'EDITOR'; editorsCanShare?: boolean }) => api.patch(`/documents/${id}`, data),
   delete: (id: string) => api.delete(`/documents/${id}`),
+  star: (id: string) => api.post(`/documents/${id}/star`),
+  unstar: (id: string) => api.delete(`/documents/${id}/star`),
+  view: (id: string) => api.post(`/documents/${id}/view`),
   addMember: (id: string, email: string, role: string) =>
     api.post(`/documents/${id}/members`, { email, role }),
   removeMember: (id: string, userId: string) =>
