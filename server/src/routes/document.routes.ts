@@ -6,6 +6,9 @@ import {
   updateDocument,
   deleteDocument,
   searchDocuments,
+  starDocument,
+  unstarDocument,
+  viewDocument,
 } from '../controllers/document.controller'
 import { addMember, removeMember } from '../controllers/member.controller'
 import { listVersions, createVersion, getVersion } from '../controllers/version.controller'
@@ -21,6 +24,9 @@ documentRouter.get('/search', searchDocuments)
 documentRouter.get('/:id', getDocument)
 documentRouter.patch('/:id', updateDocument)
 documentRouter.delete('/:id', deleteDocument)
+documentRouter.post('/:id/star', starDocument)
+documentRouter.delete('/:id/star', unstarDocument)
+documentRouter.post('/:id/view', viewDocument)
 documentRouter.post('/:id/members', addMember)
 documentRouter.delete('/:id/members/:userId', removeMember)
 documentRouter.get('/:id/versions', listVersions)

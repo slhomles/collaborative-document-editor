@@ -21,6 +21,8 @@ model User {
   ownedDocuments   Document[]        @relation("DocumentOwner")
   memberships      DocumentMember[]
   versions         DocumentVersion[] @relation("VersionCreator")
+  starredDocs      StarredDocument[]
+  viewedDocs       DocumentViewed[]
   @@map("users")
 }
 
@@ -39,6 +41,8 @@ model Document {
   owner    User             @relation("DocumentOwner", fields: [ownerId], references: [id])
   members  DocumentMember[]
   versions DocumentVersion[]
+  starredDocs StarredDocument[]
+  viewedDocs  DocumentViewed[]
 
   @@index([ownerId])
   @@index([isDeleted])
@@ -82,4 +86,32 @@ enum Role {
   OWNER
   EDITOR
   VIEWER
+}
+
+model StarredDocument {
+  id         String   @id @default(uuid())
+  documentId String   @map("document_id")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+  @@map("starred_documents")
+}
+
+model DocumentViewed {
+  id         String   @id @default(uuid())
+  documentId String   @map("document_id")
+  userId     String   @map("user_id")
+  viewedAt   DateTime @default(now()) @updatedAt @map("viewed_at")
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+  @@map("document_viewed")
 }

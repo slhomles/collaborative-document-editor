@@ -1,10 +1,24 @@
 import { useState } from 'react'
 
-interface Doc {
+export interface Doc {
   id: string
   title: string
   updatedAt: string
   owner: { name: string }
+  ownerId?: string
+  isStarred?: boolean
+  viewedAt?: string | null
+  publicRole?: string
+  memberIds?: string[]
+}
+
+function formatRecentTime(viewedAt?: string | null, updatedAt?: string) {
+  if (viewedAt) {
+    const date = new Date(viewedAt)
+    return `Bạn đã mở lúc ${date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${date.toLocaleDateString('vi-VN')}`
+  }
+  const date = new Date(updatedAt || '')
+  return `Đã sửa ${date.toLocaleDateString('vi-VN')}`
 }
 
 interface Props {
@@ -12,6 +26,7 @@ interface Props {
   onOpen: (id: string) => void
   onDelete: (id: string) => void
   onRename?: (id: string, newTitle: string) => void
+  onToggleStar?: (id: string, currentlyStarred: boolean) => void
   viewMode?: 'grid' | 'list'
 }
 
@@ -26,7 +41,15 @@ function DocIcon() {
   )
 }
 
-function GridCard({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void; onRename?: (id: string, t: string) => void }) {
+function StarIcon({ starred }: { starred: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill={starred ? '#fbbf24' : 'none'} stroke={starred ? '#fbbf24' : '#888'} strokeWidth="1.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499c.196-.4.778-.4 0-.8l1.384 2.802a1.24 1.24 0 0 0 .935.68l3.093.45c.44.064.616.606.297.918l-2.237 2.182a1.24 1.24 0 0 0-.356 1.096l.528 3.08c.075.44-.39.777-.788.57l-2.766-1.455a1.24 1.24 0 0 0-1.148 0l-2.766 1.455c-.398.207-.863-.13-.788-.57l.528-3.08a1.24 1.24 0 0 0-.356-1.096L3.89 9.549c-.319-.312-.143-.854.297-.918l3.093-.45a1.24 1.24 0 0 0 .935-.68L9.5 3.499c.197-.4.78-.4.98 0z" />
+    </svg>
+  )
+}
+
+function GridCard({ doc, onOpen, onDelete, onRename, onToggleStar }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void; onRename?: (id: string, t: string) => void; onToggleStar?: (id: string, currentlyStarred: boolean) => void }) {
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(doc.title)
@@ -66,32 +89,66 @@ function GridCard({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: 
       </div>
 
       {/* Info area */}
-      <div style={{ padding: '10px 12px' }}>
-        {editing ? (
-          <input
-            autoFocus
-            value={value}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => setValue(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-              if (e.key === 'Enter') { e.preventDefault(); commit() }
-              else if (e.key === 'Escape') { setValue(doc.title); setEditing(false) }
-            }}
-            style={{ fontWeight: 500, fontSize: 14, marginBottom: 4, border: '1px solid #d97757', borderRadius: 4, padding: '1px 4px', outline: 'none', width: '100%', boxSizing: 'border-box' }}
-          />
-        ) : (
-          <div style={{
-            fontWeight: 500, fontSize: 14, color: '#1a1a1a',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4,
-          }}>
-            {doc.title}
+      <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {editing ? (
+            <input
+              autoFocus
+              value={value}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setValue(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter') { e.preventDefault(); commit() }
+                else if (e.key === 'Escape') { setValue(doc.title); setEditing(false) }
+              }}
+              style={{ fontWeight: 500, fontSize: 14, marginBottom: 4, border: '1px solid #d97757', borderRadius: 4, padding: '1px 4px', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+            />
+          ) : (
+            <div style={{
+              fontWeight: 500, fontSize: 14, color: '#1a1a1a',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4,
+            }}>
+              {doc.title}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#888' }}>
+            {doc.owner.name} · {formatRecentTime(doc.viewedAt, doc.updatedAt)}
           </div>
-        )}
-        <div style={{ fontSize: 11, color: '#888' }}>
-          {doc.owner.name} · {new Date(doc.updatedAt).toLocaleDateString('vi-VN')}
         </div>
+
+        {/* Star Button */}
+        {onToggleStar && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleStar(doc.id, !!doc.isStarred)
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: doc.isStarred ? 1 : (hovered ? 0.6 : 0.2),
+              transition: 'opacity 0.15s, transform 0.1s',
+            }}
+            onMouseEnter={(e) => {
+              if (!doc.isStarred) e.currentTarget.style.opacity = '1'
+              e.currentTarget.style.transform = 'scale(1.15)'
+            }}
+            onMouseLeave={(e) => {
+              if (!doc.isStarred) e.currentTarget.style.opacity = hovered ? '0.6' : '0.2'
+              e.currentTarget.style.transform = 'scale(1)'
+            }}
+            title={doc.isStarred ? 'Bỏ gắn dấu sao' : 'Gắn dấu sao'}
+          >
+            <StarIcon starred={!!doc.isStarred} />
+          </button>
+        )}
       </div>
 
       {/* Action buttons — shown on hover */}
@@ -136,7 +193,7 @@ function iconActionStyle(color: string, border: string): React.CSSProperties {
   }
 }
 
-function ListRow({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void; onRename?: (id: string, t: string) => void }) {
+function ListRow({ doc, onOpen, onDelete, onRename, onToggleStar }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void; onRename?: (id: string, t: string) => void; onToggleStar?: (id: string, currentlyStarred: boolean) => void }) {
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(doc.title)
@@ -164,6 +221,37 @@ function ListRow({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: s
         transition: 'background 0.15s',
       }}
     >
+      {onToggleStar && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleStar(doc.id, !!doc.isStarred)
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: doc.isStarred ? 1 : (hovered ? 0.6 : 0.2),
+            transition: 'opacity 0.15s, transform 0.1s',
+          }}
+          onMouseEnter={(e) => {
+            if (!doc.isStarred) e.currentTarget.style.opacity = '1'
+            e.currentTarget.style.transform = 'scale(1.15)'
+          }}
+          onMouseLeave={(e) => {
+            if (!doc.isStarred) e.currentTarget.style.opacity = hovered ? '0.6' : '0.2'
+            e.currentTarget.style.transform = 'scale(1)'
+          }}
+          title={doc.isStarred ? 'Bỏ gắn dấu sao' : 'Gắn dấu sao'}
+        >
+          <StarIcon starred={!!doc.isStarred} />
+        </button>
+      )}
+
       <DocIcon />
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
@@ -186,7 +274,7 @@ function ListRow({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: s
           </div>
         )}
         <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
-          {doc.owner.name} · {new Date(doc.updatedAt).toLocaleDateString('vi-VN')}
+          {doc.owner.name} · {formatRecentTime(doc.viewedAt, doc.updatedAt)}
         </div>
       </div>
       {!editing && (
@@ -211,12 +299,12 @@ function ListRow({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: s
   )
 }
 
-export function DocumentList({ docs, onOpen, onDelete, onRename, viewMode = 'grid' }: Props) {
+export function DocumentList({ docs, onOpen, onDelete, onRename, onToggleStar, viewMode = 'grid' }: Props) {
   if (docs.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '56px 0', color: '#888' }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
-        <p style={{ margin: 0, fontSize: 14 }}>Chưa có tài liệu nào. Tạo tài liệu mới để bắt đầu.</p>
+        <p style={{ margin: 0, fontSize: 14 }}>Chưa có tài liệu nào ở mục này.</p>
       </div>
     )
   }
@@ -229,7 +317,7 @@ export function DocumentList({ docs, onOpen, onDelete, onRename, viewMode = 'gri
         gap: 16,
       }}>
         {docs.map((doc) => (
-          <GridCard key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} onRename={onRename} />
+          <GridCard key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} onRename={onRename} onToggleStar={onToggleStar} />
         ))}
       </div>
     )
@@ -238,7 +326,7 @@ export function DocumentList({ docs, onOpen, onDelete, onRename, viewMode = 'gri
   return (
     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {docs.map((doc) => (
-        <ListRow key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} onRename={onRename} />
+        <ListRow key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} onRename={onRename} onToggleStar={onToggleStar} />
       ))}
     </ul>
   )
