@@ -45,6 +45,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Doc[] | null>(null)
   const navigate = useNavigate()
   const { signOut } = useAuth()
   const user = useAuthStore((s) => s.user)
@@ -55,6 +56,29 @@ export function DashboardPage() {
       setLoading(false)
     })
   }, [])
+
+  // Tìm kiếm phía server (tên + nội dung, ưu tiên tên) với debounce 300ms.
+  useEffect(() => {
+    const q = searchQuery.trim()
+    if (!q) { setSearchResults(null); return }
+    const t = setTimeout(() => {
+      documentApi.search(q)
+        .then(({ data }) => setSearchResults(data as unknown as Doc[]))
+        .catch(() => setSearchResults([]))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
+  async function handleRename(id: string, title: string) {
+    setError(null)
+    try {
+      await documentApi.update(id, { title })
+      setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, title } : d)))
+      setSearchResults((prev) => prev ? prev.map((d) => (d.id === id ? { ...d, title } : d)) : prev)
+    } catch {
+      setError('Không thể đổi tên tài liệu. Vui lòng thử lại.')
+    }
+  }
 
   async function createDoc() {
     setCreating(true)
@@ -82,11 +106,11 @@ export function DashboardPage() {
 
   const sortedDocs = [...docs].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
   const recentDocs = sortedDocs.slice(0, 4)
-  const showRecent = !searchQuery && docs.length >= 5
+  const isSearching = searchQuery.trim().length > 0
+  const showRecent = !isSearching && docs.length >= 5
 
-  const filteredDocs = searchQuery
-    ? docs.filter((d) => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    : sortedDocs
+  // Khi đang tìm kiếm: dùng kết quả server (tên + nội dung). Ngược lại: danh sách đầy đủ.
+  const displayedDocs = isSearching ? (searchResults ?? []) : sortedDocs
 
   const initials = user?.name ? getInitials(user.name) : '?'
 
@@ -229,7 +253,7 @@ export function DashboardPage() {
                   }}>
                     Gần đây
                   </h2>
-                  <DocumentList docs={recentDocs} onOpen={(id) => navigate(`/doc/${id}`)} onDelete={deleteDoc} viewMode="grid" />
+                  <DocumentList docs={recentDocs} onOpen={(id) => navigate(`/doc/${id}`)} onDelete={deleteDoc} onRename={handleRename} viewMode="grid" />
                 </section>
               )}
 
@@ -291,9 +315,10 @@ export function DashboardPage() {
                 </div>
 
                 <DocumentList
-                  docs={filteredDocs}
+                  docs={displayedDocs}
                   onOpen={(id) => navigate(`/doc/${id}`)}
                   onDelete={deleteDoc}
+                  onRename={handleRename}
                   viewMode={viewMode}
                 />
               </section>

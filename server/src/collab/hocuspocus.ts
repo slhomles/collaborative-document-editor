@@ -8,6 +8,8 @@ import {
   scheduleAutoSnapshot,
   flushSnapshotOnStore,
   throttledCacheUpdate,
+  scheduleContentPreviewUpdate,
+  updateContentPreview,
 } from './persistence'
 import { canEditDocument, getDocumentRole } from '../utils/documentAccess'
 
@@ -15,6 +17,16 @@ type CollabContext = {
   userId?: string
   documentId?: string
   role?: Role
+}
+
+// Trích text thuần từ Yjs (Tiptap Collaboration dùng XmlFragment field 'default') để search nội dung.
+function extractPlainText(doc: Y.Doc): string {
+  return doc
+    .getXmlFragment('default')
+    .toString()
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export const hocuspocusServer = Server.configure({
@@ -64,6 +76,8 @@ export const hocuspocusServer = Server.configure({
   async onStoreDocument({ documentName, document }) {
     const state = Buffer.from(Y.encodeStateAsUpdate(document))
     await storeDocument(documentName, state)
+    // Chốt text preview cuối phiên để search nội dung luôn cập nhật.
+    await updateContentPreview(documentName, extractPlainText(document))
     // Chốt bản version cuối phiên (auto-version kiểu Google Docs).
     await flushSnapshotOnStore(documentName)
   },
@@ -76,6 +90,10 @@ export const hocuspocusServer = Server.configure({
     throttledCacheUpdate(documentName, state)
 
     // Auto-snapshot khi nhàn rỗi / định kỳ — chỉ user có quyền ghi.
-    if (collabContext.userId) scheduleAutoSnapshot(documentName, collabContext.userId, state)
+    if (collabContext.userId) {
+      scheduleAutoSnapshot(documentName, collabContext.userId, state)
+      // Cập nhật text preview (debounce 8s) để search theo nội dung.
+      scheduleContentPreviewUpdate(documentName, extractPlainText(document))
+    }
   },
 })

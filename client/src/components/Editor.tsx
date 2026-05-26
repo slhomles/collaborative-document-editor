@@ -20,6 +20,42 @@ export function Editor({ editor }: Props) {
         .editor-wrapper .ProseMirror p { margin: 0 0 8px; }
         .editor-wrapper .ProseMirror h1 { font-size: 2em; margin: 16px 0 8px; }
         .editor-wrapper .ProseMirror h2 { font-size: 1.5em; margin: 12px 0 6px; }
+        .editor-wrapper .ProseMirror h3 { font-size: 1.25em; margin: 10px 0 6px; }
+
+        /* Ảnh */
+        .editor-wrapper .ProseMirror img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 4px;
+        }
+        /* Liên kết */
+        .editor-wrapper .ProseMirror a {
+          color: #2563eb;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        /* Highlight */
+        .editor-wrapper .ProseMirror mark {
+          border-radius: 2px;
+          padding: 0 1px;
+        }
+        /* Danh sách kiểm (task list) */
+        .editor-wrapper .ProseMirror ul[data-type="taskList"] {
+          list-style: none;
+          padding-left: 4px;
+        }
+        .editor-wrapper .ProseMirror ul[data-type="taskList"] li {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .editor-wrapper .ProseMirror ul[data-type="taskList"] li > label {
+          margin-top: 4px;
+          user-select: none;
+        }
+        .editor-wrapper .ProseMirror ul[data-type="taskList"] li > div {
+          flex: 1;
+        }
 
         /* Collaboration cursor styles */
         .collaboration-cursor__caret {

@@ -138,16 +138,36 @@ export async function searchDocuments(req: AuthRequest, res: Response, next: Nex
     const q = String(req.query.q || '').trim()
     if (!q) return res.json([])
 
-    const docs = await prisma.document.findMany({
-      where: {
-        isDeleted: false,
-        contentPreview: { contains: q, mode: 'insensitive' },
-        OR: [{ ownerId: userId }, { members: { some: { userId } } }],
-      },
-      select: { id: true, title: true, createdAt: true, updatedAt: true, owner: { select: { name: true } } },
+    const access = { OR: [{ ownerId: userId }, { members: { some: { userId } } }] }
+    const select = {
+      id: true,
+      title: true,
+      createdAt: true,
+      updatedAt: true,
+      owner: { select: { name: true } },
+    }
+
+    // 1. Khớp tên — ưu tiên hiển thị trước.
+    const byTitle = await prisma.document.findMany({
+      where: { isDeleted: false, title: { contains: q, mode: 'insensitive' }, ...access },
+      select,
       orderBy: { updatedAt: 'desc' },
     })
-    res.json(docs)
+
+    // 2. Khớp nội dung — loại các doc đã khớp tên để không trùng.
+    const titleIds = byTitle.map((d) => d.id)
+    const byContent = await prisma.document.findMany({
+      where: {
+        isDeleted: false,
+        id: { notIn: titleIds },
+        contentPreview: { contains: q, mode: 'insensitive' },
+        ...access,
+      },
+      select,
+      orderBy: { updatedAt: 'desc' },
+    })
+
+    res.json([...byTitle, ...byContent])
   } catch (err) {
     next(err)
   }

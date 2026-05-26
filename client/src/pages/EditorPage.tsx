@@ -11,6 +11,8 @@ import { ConnectionStatus } from '../components/ConnectionStatus'
 import { VersionPanel } from '../components/VersionPanel'
 import { VersionHistoryView } from '../components/VersionHistoryView'
 import { ShareModal } from '../components/ShareModal'
+import { EditableTitle } from '../components/EditableTitle'
+import { documentApi } from '../services/api'
 
 type SidebarTab = 'users' | 'versions'
 
@@ -40,6 +42,16 @@ export function EditorPage() {
   }, [canEdit, provider])
 
   const canRestore = canEdit
+
+  async function handleRenameTitle(newTitle: string) {
+    if (!id) return
+    try {
+      await documentApi.update(id, { title: newTitle })
+      refreshDoc()
+    } catch {
+      // Bỏ qua — refreshDoc sẽ kéo lại tên hiện tại nếu thất bại.
+    }
+  }
 
   // Chế độ lịch sử phiên bản toàn trang.
   if (versionMode && id) {
@@ -71,15 +83,8 @@ export function EditorPage() {
         </button>
 
         {doc && (
-          <span style={{
-            fontSize: 15, fontWeight: 600, color: '#1a1a1a',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 240,
-          }}>
-            {doc.title}
-          </span>
+          <EditableTitle title={doc.title} canEdit={canEdit} onSave={handleRenameTitle} />
         )}
-
-        <Toolbar editor={editor} readOnly={!canEdit} />
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <ConnectionStatus connection={connection} />
@@ -94,6 +99,11 @@ export function EditorPage() {
             🔗 Chia sẻ
           </button>
         </div>
+      </div>
+
+      {/* Toolbar — hàng riêng kiểu Google Docs */}
+      <div style={{ flexShrink: 0 }}>
+        <Toolbar editor={editor} readOnly={!canEdit} />
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

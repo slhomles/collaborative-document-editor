@@ -33,6 +33,8 @@ redis.on('error', (err) => { //.on() catch error when some error throw
 
 const REDIS_TTL = 60 * 60 * 24 // 24 hours
 const CACHE_THROTTLE_MS = 300 // gộp các keystroke trong 300ms thành 1 lệnh ghi Redis
+const CONTENT_PREVIEW_DEBOUNCE_MS = 8 * 1000 // ghi text preview tối đa mỗi 8s để search được nội dung
+const CONTENT_PREVIEW_MAX_LEN = 2000
 
 // Auto-version kiểu Google Docs: chốt checkpoint khi ngừng gõ (idle) HOẶC tối đa mỗi maxWait
 // dù gõ liên tục, cộng thêm 1 bản chốt khi đóng doc (flushSnapshotOnStore).
@@ -42,6 +44,8 @@ const AUTO_MAX_WAIT_MS = 10 * 60 * 1000 // vẫn chốt sau tối đa 10 phút d
 const snapshotTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const cacheTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingCacheState = new Map<string, Buffer>()
+const contentPreviewTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingContentPreview = new Map<string, string>()
 
 // Trạng thái auto-snapshot theo document.
 const dirtySince = new Map<string, number>() // mốc thay đổi đầu tiên kể từ snapshot cuối
@@ -116,6 +120,33 @@ export function throttledCacheUpdate(documentId: string, state: Buffer) {
   cacheTimers.set(documentId, timer)
 }
 
+// Ghi text preview thuần (để search theo nội dung). Non-fatal.
+export async function updateContentPreview(documentId: string, text: string) {
+  try {
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { contentPreview: text.slice(0, CONTENT_PREVIEW_MAX_LEN) },
+    })
+  } catch {
+    // Document có thể đã bị xóa — bỏ qua.
+  }
+}
+
+// Debounce ghi contentPreview ~8s để không hammer Postgres mỗi keystroke.
+export function scheduleContentPreviewUpdate(documentId: string, text: string) {
+  pendingContentPreview.set(documentId, text)
+  if (contentPreviewTimers.has(documentId)) return
+
+  const timer = setTimeout(() => {
+    contentPreviewTimers.delete(documentId)
+    const latest = pendingContentPreview.get(documentId)
+    pendingContentPreview.delete(documentId)
+    if (latest !== undefined) void updateContentPreview(documentId, latest)
+  }, CONTENT_PREVIEW_DEBOUNCE_MS)
+
+  contentPreviewTimers.set(documentId, timer)
+}
+
 // Xóa cache + dọn timer khi document bị xóa, tránh state cũ tồn tại 24h.
 export async function invalidateDocumentCache(documentId: string) {
   const cacheTimer = cacheTimers.get(documentId)
@@ -134,6 +165,13 @@ export async function invalidateDocumentCache(documentId: string) {
   lastSnapshotHash.delete(documentId)
   lastEditorByDoc.delete(documentId)
   pendingSnapshotState.delete(documentId)
+
+  const cpTimer = contentPreviewTimers.get(documentId)
+  if (cpTimer) {
+    clearTimeout(cpTimer)
+    contentPreviewTimers.delete(documentId)
+  }
+  pendingContentPreview.delete(documentId)
 
   try {
     await redis.del(redisKey(documentId))

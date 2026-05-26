@@ -11,6 +11,7 @@ interface Props {
   docs: Doc[]
   onOpen: (id: string) => void
   onDelete: (id: string) => void
+  onRename?: (id: string, newTitle: string) => void
   viewMode?: 'grid' | 'list'
 }
 
@@ -25,12 +26,21 @@ function DocIcon() {
   )
 }
 
-function GridCard({ doc, onOpen, onDelete }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void }) {
+function GridCard({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void; onRename?: (id: string, t: string) => void }) {
   const [hovered, setHovered] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(doc.title)
+
+  function commit() {
+    const trimmed = value.trim()
+    setEditing(false)
+    if (trimmed && trimmed !== doc.title) onRename?.(doc.id, trimmed)
+    else setValue(doc.title)
+  }
 
   return (
     <div
-      onClick={() => onOpen(doc.id)}
+      onClick={() => { if (!editing) onOpen(doc.id) }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -57,57 +67,90 @@ function GridCard({ doc, onOpen, onDelete }: { doc: Doc; onOpen: (id: string) =>
 
       {/* Info area */}
       <div style={{ padding: '10px 12px' }}>
-        <div style={{
-          fontWeight: 500,
-          fontSize: 14,
-          color: '#1a1a1a',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          marginBottom: 4,
-        }}>
-          {doc.title}
-        </div>
+        {editing ? (
+          <input
+            autoFocus
+            value={value}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === 'Enter') { e.preventDefault(); commit() }
+              else if (e.key === 'Escape') { setValue(doc.title); setEditing(false) }
+            }}
+            style={{ fontWeight: 500, fontSize: 14, marginBottom: 4, border: '1px solid #d97757', borderRadius: 4, padding: '1px 4px', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+          />
+        ) : (
+          <div style={{
+            fontWeight: 500, fontSize: 14, color: '#1a1a1a',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4,
+          }}>
+            {doc.title}
+          </div>
+        )}
         <div style={{ fontSize: 11, color: '#888' }}>
           {doc.owner.name} · {new Date(doc.updatedAt).toLocaleDateString('vi-VN')}
         </div>
       </div>
 
-      {/* Delete button — shown on hover */}
-      {hovered && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(doc.id) }}
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            background: 'rgba(255,255,255,0.85)',
-            border: '1px solid #FFAAAA',
-            borderRadius: 4,
-            color: '#f87171',
-            cursor: 'pointer',
-            fontSize: 14,
-            width: 24,
-            height: 24,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            lineHeight: 1,
-          }}
-        >
-          ×
-        </button>
+      {/* Action buttons — shown on hover */}
+      {hovered && !editing && (
+        <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
+          {onRename && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setValue(doc.title); setEditing(true) }}
+              title="Đổi tên"
+              style={iconActionStyle('#888', '#D0D0CC')}
+            >
+              ✎
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(doc.id) }}
+            title="Xóa"
+            style={iconActionStyle('#f87171', '#FFAAAA')}
+          >
+            ×
+          </button>
+        </div>
       )}
     </div>
   )
 }
 
-function ListRow({ doc, onOpen, onDelete }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void }) {
+function iconActionStyle(color: string, border: string): React.CSSProperties {
+  return {
+    background: 'rgba(255,255,255,0.9)',
+    border: `1px solid ${border}`,
+    borderRadius: 4,
+    color,
+    cursor: 'pointer',
+    fontSize: 13,
+    width: 24,
+    height: 24,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1,
+  }
+}
+
+function ListRow({ doc, onOpen, onDelete, onRename }: { doc: Doc; onOpen: (id: string) => void; onDelete: (id: string) => void; onRename?: (id: string, t: string) => void }) {
   const [hovered, setHovered] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(doc.title)
+
+  function commit() {
+    const trimmed = value.trim()
+    setEditing(false)
+    if (trimmed && trimmed !== doc.title) onRename?.(doc.id, trimmed)
+    else setValue(doc.title)
+  }
 
   return (
     <li
-      onClick={() => onOpen(doc.id)}
+      onClick={() => { if (!editing) onOpen(doc.id) }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -123,34 +166,52 @@ function ListRow({ doc, onOpen, onDelete }: { doc: Doc; onOpen: (id: string) => 
     >
       <DocIcon />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 500, fontSize: 14, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {doc.title}
-        </div>
+        {editing ? (
+          <input
+            autoFocus
+            value={value}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === 'Enter') { e.preventDefault(); commit() }
+              else if (e.key === 'Escape') { setValue(doc.title); setEditing(false) }
+            }}
+            style={{ fontWeight: 500, fontSize: 14, border: '1px solid #d97757', borderRadius: 4, padding: '1px 4px', outline: 'none', width: '100%', maxWidth: 360, boxSizing: 'border-box' }}
+          />
+        ) : (
+          <div style={{ fontWeight: 500, fontSize: 14, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {doc.title}
+          </div>
+        )}
         <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
           {doc.owner.name} · {new Date(doc.updatedAt).toLocaleDateString('vi-VN')}
         </div>
       </div>
-      <button
-        onClick={(e) => { e.stopPropagation(); onDelete(doc.id) }}
-        style={{
-          background: 'none',
-          border: '1px solid #FFAAAA',
-          borderRadius: 6,
-          color: '#dc2626',
-          cursor: 'pointer',
-          fontSize: 13,
-          padding: '3px 10px',
-          opacity: hovered ? 1 : 0,
-          transition: 'opacity 0.15s',
-        }}
-      >
-        Xóa
-      </button>
+      {!editing && (
+        <div style={{ display: 'flex', gap: 6, opacity: hovered ? 1 : 0, transition: 'opacity 0.15s' }}>
+          {onRename && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setValue(doc.title); setEditing(true) }}
+              style={{ background: 'none', border: '1px solid #D0D0CC', borderRadius: 6, color: '#666', cursor: 'pointer', fontSize: 13, padding: '3px 10px' }}
+            >
+              Đổi tên
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(doc.id) }}
+            style={{ background: 'none', border: '1px solid #FFAAAA', borderRadius: 6, color: '#dc2626', cursor: 'pointer', fontSize: 13, padding: '3px 10px' }}
+          >
+            Xóa
+          </button>
+        </div>
+      )}
     </li>
   )
 }
 
-export function DocumentList({ docs, onOpen, onDelete, viewMode = 'grid' }: Props) {
+export function DocumentList({ docs, onOpen, onDelete, onRename, viewMode = 'grid' }: Props) {
   if (docs.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '56px 0', color: '#888' }}>
@@ -168,7 +229,7 @@ export function DocumentList({ docs, onOpen, onDelete, viewMode = 'grid' }: Prop
         gap: 16,
       }}>
         {docs.map((doc) => (
-          <GridCard key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} />
+          <GridCard key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} onRename={onRename} />
         ))}
       </div>
     )
@@ -177,7 +238,7 @@ export function DocumentList({ docs, onOpen, onDelete, viewMode = 'grid' }: Prop
   return (
     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {docs.map((doc) => (
-        <ListRow key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} />
+        <ListRow key={doc.id} doc={doc} onOpen={onOpen} onDelete={onDelete} onRename={onRename} />
       ))}
     </ul>
   )
