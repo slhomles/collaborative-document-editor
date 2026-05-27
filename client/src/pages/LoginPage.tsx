@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
 import { useAuth } from '../hooks/useAuth'
 
 export function LoginPage() {
@@ -8,7 +9,11 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [localError, setLocalError] = useState('')
-  const { login, register, loading, error } = useAuth()
+  const { login, register, googleLogin, loading, error } = useAuth()
+
+  function handleGoogleCredential(credentialResponse: CredentialResponse) {
+    if (credentialResponse.credential) googleLogin(credentialResponse.credential)
+  }
 
   const handleModeChange = (newMode: 'login' | 'register') => {
     setMode(newMode)
@@ -130,6 +135,22 @@ export function LoginPage() {
           >
             {loading ? 'Đang xử lý...' : mode === 'login' ? 'Đăng nhập' : 'Đăng ký'}
           </button>
+
+          <div className="flex items-center gap-3 my-1">
+            <hr className="flex-1 border-gray-200" />
+            <span className="text-xs text-gray-400">hoặc</span>
+            <hr className="flex-1 border-gray-200" />
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleCredential}
+              onError={() => {}}
+              text={mode === 'login' ? 'signin_with' : 'signup_with'}
+              locale="vi"
+              width="320"
+            />
+          </div>
         </form>
       </div>
     </div>

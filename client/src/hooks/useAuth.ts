@@ -51,10 +51,24 @@ export function useAuth() {
     }
   }
 
+  async function googleLogin(credential: string) {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data } = await authApi.googleLogin(credential)
+      setAuth(data.data.token, data.data.user)
+      navigate('/')
+    } catch (err: any) {
+      setError(authErrorMessage(err, 'Đăng nhập bằng Google thất bại'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function signOut() {
     logout()
     navigate('/login')
   }
 
-  return { login, register, signOut, loading, error }
+  return { login, register, googleLogin, signOut, loading, error }
 }
