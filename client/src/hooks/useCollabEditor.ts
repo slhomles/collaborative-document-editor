@@ -3,20 +3,9 @@ import * as Y from 'yjs'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
-import Underline from '@tiptap/extension-underline'
-import TextStyle from '@tiptap/extension-text-style'
-import { Color } from '@tiptap/extension-color'
-import FontFamily from '@tiptap/extension-font-family'
-import Highlight from '@tiptap/extension-highlight'
-import Link from '@tiptap/extension-link'
-import Image from '@tiptap/extension-image'
-import TextAlign from '@tiptap/extension-text-align'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import { FontSize } from '../components/editor/FontSize'
+import { getBaseExtensions } from '../lib/editorExtensions'
 import { useAuthStore } from '../store/authStore'
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:1234'
@@ -58,7 +47,7 @@ export function useCollabEditor(documentId: string, options: UseCollabEditorOpti
   const editor = useEditor({
     editable,
     extensions: [
-      StarterKit.configure({ history: false }),
+      ...getBaseExtensions(),
       Collaboration.configure({ document: ydoc }),
       CollaborationCursor.configure({
         provider,
@@ -67,17 +56,6 @@ export function useCollabEditor(documentId: string, options: UseCollabEditorOpti
           color: randomColor(),
         },
       }),
-      Underline,
-      TextStyle,
-      Color,
-      FontFamily,
-      FontSize,
-      Highlight.configure({ multicolor: true }),
-      Link.configure({ openOnClick: false, autolink: true }),
-      Image,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
     ],
   })
 

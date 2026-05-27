@@ -58,3 +58,15 @@ export const versionApi = {
   create: (docId: string, label?: string) => api.post(`/documents/${docId}/versions`, { label }),
   get: (docId: string, versionId: string) => api.get(`/documents/${docId}/versions/${versionId}`),
 }
+
+// Upload
+export const uploadApi = {
+  image: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ url: string }>('/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+

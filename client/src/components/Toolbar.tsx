@@ -1,4 +1,7 @@
+import { useRef, useState } from 'react'
 import { Editor } from '@tiptap/react'
+import { InputModal } from './InputModal'
+import { uploadApi } from '../services/api'
 
 interface Props {
   editor: Editor | null
@@ -16,6 +19,10 @@ const FONT_FAMILIES = [
 const FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 24, 30, 36, 48]
 
 export function Toolbar({ editor, readOnly = false }: Props) {
+  const [showLinkModal, setShowLinkModal] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   if (!editor) return null
 
   const disabled = readOnly
@@ -48,98 +55,144 @@ export function Toolbar({ editor, readOnly = false }: Props) {
     editor!.chain().focus().setFontSize(`${clamped}px`).run()
   }
 
-  // ----- Link / Image -----
-  function setLink() {
-    const prev = editor!.getAttributes('link').href as string | undefined
-    const url = window.prompt('Nhập URL liên kết (để trống để gỡ):', prev || '')
-    if (url === null) return
-    if (url === '') {
+  // ----- Link -----
+  function handleSetLink() {
+    setShowLinkModal(true)
+  }
+
+  function handleLinkSubmit(url: string) {
+    setShowLinkModal(false)
+    if (url.trim() === '') {
       editor!.chain().focus().extendMarkRange('link').unsetLink().run()
       return
     }
     editor!.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
   }
 
-  function addImage() {
-    const url = window.prompt('Nhập URL ảnh:')
-    if (url) editor!.chain().focus().setImage({ src: url }).run()
+  // ----- Image upload -----
+  function handleImageClick() {
+    fileInputRef.current?.click()
   }
 
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Reset input để có thể chọn lại cùng file
+    e.target.value = ''
+
+    setUploading(true)
+    try {
+      const res = await uploadApi.image(file)
+      // Lưu URL dạng relative — Vite proxy sẽ forward /uploads/* đến server
+      editor!.chain().focus().setImage({ src: res.data.url }).run()
+    } catch (err) {
+      console.error('Upload failed:', err)
+      alert('Tải ảnh thất bại. Vui lòng thử lại.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const linkHref = editor.getAttributes('link').href as string | undefined
+
   return (
-    <div style={barStyle}>
-      {/* Undo / Redo / In */}
-      <IconBtn title="Hoàn tác" disabled={disabled || !editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>↶</IconBtn>
-      <IconBtn title="Làm lại" disabled={disabled || !editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>↷</IconBtn>
-      <IconBtn title="In" disabled={disabled} onClick={() => window.print()}>🖨</IconBtn>
-      <Sep />
+    <>
+      <div style={barStyle}>
+        {/* Undo / Redo */}
+        <IconBtn title="Hoàn tác" disabled={disabled || !editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>↶</IconBtn>
+        <IconBtn title="Làm lại" disabled={disabled || !editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>↷</IconBtn>
+        <Sep />
 
-      {/* Kiểu đoạn */}
-      <select value={currentBlock} disabled={disabled} onChange={(e) => applyBlock(e.target.value)} style={selectStyle(132)} title="Kiểu văn bản">
-        <option value="p">Văn bản thường</option>
-        <option value="h1">Tiêu đề 1</option>
-        <option value="h2">Tiêu đề 2</option>
-        <option value="h3">Tiêu đề 3</option>
-      </select>
+        {/* Kiểu đoạn */}
+        <select value={currentBlock} disabled={disabled} onChange={(e) => applyBlock(e.target.value)} style={selectStyle(132)} title="Kiểu văn bản">
+          <option value="p">Văn bản thường</option>
+          <option value="h1">Tiêu đề 1</option>
+          <option value="h2">Tiêu đề 2</option>
+          <option value="h3">Tiêu đề 3</option>
+        </select>
 
-      {/* Font family */}
-      <select value={currentFont} disabled={disabled} onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()} style={selectStyle(132)} title="Phông chữ">
-        <option value="">Phông mặc định</option>
-        {FONT_FAMILIES.map((f) => (
-          <option key={f.value} value={f.value}>{f.label}</option>
-        ))}
-      </select>
-      <Sep />
+        {/* Font family */}
+        <select value={currentFont} disabled={disabled} onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()} style={selectStyle(132)} title="Phông chữ">
+          <option value="">Phông mặc định</option>
+          {FONT_FAMILIES.map((f) => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
+        <Sep />
 
-      {/* Cỡ chữ */}
-      <IconBtn title="Giảm cỡ chữ" disabled={disabled} onClick={() => setSize(currentSize - 1)}>−</IconBtn>
-      <select value={FONT_SIZES.includes(currentSize) ? String(currentSize) : ''} disabled={disabled} onChange={(e) => setSize(Number(e.target.value))} style={selectStyle(56)} title="Cỡ chữ">
-        {!FONT_SIZES.includes(currentSize) && <option value="">{currentSize}</option>}
-        {FONT_SIZES.map((s) => (
-          <option key={s} value={s}>{s}</option>
-        ))}
-      </select>
-      <IconBtn title="Tăng cỡ chữ" disabled={disabled} onClick={() => setSize(currentSize + 1)}>+</IconBtn>
-      <Sep />
+        {/* Cỡ chữ */}
+        <IconBtn title="Giảm cỡ chữ" disabled={disabled} onClick={() => setSize(currentSize - 1)}>−</IconBtn>
+        <select value={FONT_SIZES.includes(currentSize) ? String(currentSize) : ''} disabled={disabled} onChange={(e) => setSize(Number(e.target.value))} style={selectStyle(56)} title="Cỡ chữ">
+          {!FONT_SIZES.includes(currentSize) && <option value="">{currentSize}</option>}
+          {FONT_SIZES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <IconBtn title="Tăng cỡ chữ" disabled={disabled} onClick={() => setSize(currentSize + 1)}>+</IconBtn>
+        <Sep />
 
-      {/* B / I / U */}
-      <IconBtn title="Đậm" active={editor.isActive('bold')} disabled={disabled} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></IconBtn>
-      <IconBtn title="Nghiêng" active={editor.isActive('italic')} disabled={disabled} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></IconBtn>
-      <IconBtn title="Gạch chân" active={editor.isActive('underline')} disabled={disabled} onClick={() => editor.chain().focus().toggleUnderline().run()}><u>U</u></IconBtn>
+        {/* B / I / U */}
+        <IconBtn title="Đậm" active={editor.isActive('bold')} disabled={disabled} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></IconBtn>
+        <IconBtn title="Nghiêng" active={editor.isActive('italic')} disabled={disabled} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></IconBtn>
+        <IconBtn title="Gạch chân" active={editor.isActive('underline')} disabled={disabled} onClick={() => editor.chain().focus().toggleUnderline().run()}><u>U</u></IconBtn>
 
-      {/* Màu chữ + Highlight */}
-      <label style={colorLabelStyle} title="Màu chữ">
-        <span style={{ fontSize: 13, fontWeight: 700, lineHeight: 1 }}>A</span>
-        <input type="color" disabled={disabled} value={(editor.getAttributes('textStyle').color as string) || '#000000'}
-          onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} style={colorInputStyle} />
-      </label>
-      <label style={colorLabelStyle} title="Màu nền chữ">
-        <span style={{ fontSize: 13, lineHeight: 1 }}>🖊</span>
-        <input type="color" disabled={disabled} value={(editor.getAttributes('highlight').color as string) || '#ffff00'}
-          onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()} style={colorInputStyle} />
-      </label>
-      <Sep />
+        {/* Màu chữ + Highlight */}
+        <label style={colorLabelStyle} title="Màu chữ">
+          <span style={{ fontSize: 13, fontWeight: 700, lineHeight: 1 }}>A</span>
+          <input type="color" disabled={disabled} value={(editor.getAttributes('textStyle').color as string) || '#000000'}
+            onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} style={colorInputStyle} />
+        </label>
+        <label style={colorLabelStyle} title="Màu nền chữ">
+          <span style={{ fontSize: 13, lineHeight: 1 }}>🖊</span>
+          <input type="color" disabled={disabled} value={(editor.getAttributes('highlight').color as string) || '#ffff00'}
+            onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()} style={colorInputStyle} />
+        </label>
+        <Sep />
 
-      {/* Link / Ảnh */}
-      <IconBtn title="Chèn liên kết" active={editor.isActive('link')} disabled={disabled} onClick={setLink}>🔗</IconBtn>
-      <IconBtn title="Chèn ảnh" disabled={disabled} onClick={addImage}>🖼</IconBtn>
-      <Sep />
+        {/* Link / Ảnh */}
+        <IconBtn title="Chèn liên kết" active={editor.isActive('link')} disabled={disabled} onClick={handleSetLink}>🔗</IconBtn>
+        <IconBtn title={uploading ? 'Đang tải ảnh…' : 'Chèn ảnh từ máy tính'} disabled={disabled || uploading} onClick={handleImageClick}>
+          {uploading ? '⏳' : '🖼'}
+        </IconBtn>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/bmp"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+        <Sep />
 
-      {/* Căn lề */}
-      <IconBtn title="Căn trái" active={editor.isActive({ textAlign: 'left' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('left').run()}>⬅</IconBtn>
-      <IconBtn title="Căn giữa" active={editor.isActive({ textAlign: 'center' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('center').run()}>⬌</IconBtn>
-      <IconBtn title="Căn phải" active={editor.isActive({ textAlign: 'right' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('right').run()}>➡</IconBtn>
-      <IconBtn title="Căn đều" active={editor.isActive({ textAlign: 'justify' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('justify').run()}>☰</IconBtn>
-      <Sep />
+        {/* Căn lề */}
+        <IconBtn title="Căn trái" active={editor.isActive({ textAlign: 'left' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('left').run()}>⬅</IconBtn>
+        <IconBtn title="Căn giữa" active={editor.isActive({ textAlign: 'center' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('center').run()}>⬌</IconBtn>
+        <IconBtn title="Căn phải" active={editor.isActive({ textAlign: 'right' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('right').run()}>➡</IconBtn>
+        <IconBtn title="Căn đều" active={editor.isActive({ textAlign: 'justify' })} disabled={disabled} onClick={() => editor.chain().focus().setTextAlign('justify').run()}>☰</IconBtn>
+        <Sep />
 
-      {/* Lists */}
-      <IconBtn title="Danh sách dấu đầu dòng" active={editor.isActive('bulletList')} disabled={disabled} onClick={() => editor.chain().focus().toggleBulletList().run()}>•</IconBtn>
-      <IconBtn title="Danh sách đánh số" active={editor.isActive('orderedList')} disabled={disabled} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1.</IconBtn>
-      <IconBtn title="Danh sách kiểm" active={editor.isActive('taskList')} disabled={disabled} onClick={() => editor.chain().focus().toggleTaskList().run()}>☑</IconBtn>
-      <Sep />
+        {/* Lists */}
+        <IconBtn title="Danh sách dấu đầu dòng" active={editor.isActive('bulletList')} disabled={disabled} onClick={() => editor.chain().focus().toggleBulletList().run()}>•</IconBtn>
+        <IconBtn title="Danh sách đánh số" active={editor.isActive('orderedList')} disabled={disabled} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1.</IconBtn>
+        <IconBtn title="Danh sách kiểm" active={editor.isActive('taskList')} disabled={disabled} onClick={() => editor.chain().focus().toggleTaskList().run()}>☑</IconBtn>
+        <Sep />
 
-      {/* Xóa định dạng */}
-      <IconBtn title="Xóa định dạng" disabled={disabled} onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}>⨯A</IconBtn>
-    </div>
+        {/* Xóa định dạng */}
+        <IconBtn title="Xóa định dạng" disabled={disabled} onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}>⨯A</IconBtn>
+      </div>
+
+      {/* Link Modal */}
+      {showLinkModal && (
+        <InputModal
+          title="Chèn liên kết"
+          placeholder="https://example.com"
+          defaultValue={linkHref || ''}
+          submitLabel={linkHref ? 'Cập nhật' : 'Chèn'}
+          onSubmit={handleLinkSubmit}
+          onCancel={() => setShowLinkModal(false)}
+        />
+      )}
+    </>
   )
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Extension, useEditor, EditorContent } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
+import { getBaseExtensions } from '../lib/editorExtensions'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { Node as PMNode } from '@tiptap/pm/model'
@@ -146,7 +146,7 @@ export function VersionDiffEditor({ content, prevContent, highlight, activeAncho
 
   const editor = useEditor({
     editable: false,
-    extensions: [StarterKit.configure({ history: false }), diffExtension],
+    extensions: [...getBaseExtensions(), diffExtension],
     content: content ?? { type: 'doc', content: [{ type: 'paragraph' }] },
   })
 

@@ -1,4 +1,5 @@
 import { EditorContent, Editor as TiptapEditor } from '@tiptap/react'
+import { LinkBubbleMenu } from './LinkBubbleMenu'
 
 interface Props {
   editor: TiptapEditor | null
@@ -9,6 +10,7 @@ export function Editor({ editor }: Props) {
 
   return (
     <div className="editor-wrapper">
+      <LinkBubbleMenu editor={editor} />
       <EditorContent editor={editor} />
       <style>{`
         .editor-wrapper .ProseMirror {
@@ -39,6 +41,41 @@ export function Editor({ editor }: Props) {
           border-radius: 2px;
           padding: 0 1px;
         }
+
+        /* Danh sách bullet */
+        .editor-wrapper .ProseMirror ul:not([data-type="taskList"]) {
+          list-style-type: disc;
+          padding-left: 24px;
+          margin: 4px 0 8px;
+        }
+        .editor-wrapper .ProseMirror ul:not([data-type="taskList"]) ul {
+          list-style-type: circle;
+        }
+        .editor-wrapper .ProseMirror ul:not([data-type="taskList"]) ul ul {
+          list-style-type: square;
+        }
+
+        /* Danh sách đánh số */
+        .editor-wrapper .ProseMirror ol {
+          list-style-type: decimal;
+          padding-left: 24px;
+          margin: 4px 0 8px;
+        }
+        .editor-wrapper .ProseMirror ol ol {
+          list-style-type: lower-alpha;
+        }
+        .editor-wrapper .ProseMirror ol ol ol {
+          list-style-type: lower-roman;
+        }
+
+        /* Item chung cho cả ul/ol */
+        .editor-wrapper .ProseMirror li {
+          margin: 2px 0;
+        }
+        .editor-wrapper .ProseMirror li p {
+          margin: 0;
+        }
+
         /* Danh sách kiểm (task list) */
         .editor-wrapper .ProseMirror ul[data-type="taskList"] {
           list-style: none;
@@ -80,6 +117,44 @@ export function Editor({ editor }: Props) {
           user-select: none;
           white-space: nowrap;
         }
+
+        /* Modal animations */
+        @keyframes modalFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes modalSlideIn {
+          from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Resizable image */
+        .resizable-image-container.selected {
+          outline: 2px solid #2563eb;
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
+        .resizable-image-container.resizing {
+          outline-color: #60a5fa;
+        }
+        .resize-handle {
+          position: absolute;
+          width: 10px;
+          height: 10px;
+          background: #2563eb;
+          border: 2px solid #fff;
+          border-radius: 2px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+          z-index: 10;
+        }
+        .resize-handle:hover {
+          background: #1d4ed8;
+          transform: scale(1.2);
+        }
+        .resize-handle-tl { top: -5px; left: -5px; cursor: nw-resize; }
+        .resize-handle-tr { top: -5px; right: -5px; cursor: ne-resize; }
+        .resize-handle-bl { bottom: -5px; left: -5px; cursor: sw-resize; }
+        .resize-handle-br { bottom: -5px; right: -5px; cursor: se-resize; }
       `}</style>
     </div>
   )

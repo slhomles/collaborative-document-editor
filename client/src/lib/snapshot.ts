@@ -1,8 +1,8 @@
 import * as Y from 'yjs'
 import { Editor as CoreEditor } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
+import { getBaseExtensions } from './editorExtensions'
 
 export function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64)
@@ -17,7 +17,7 @@ export function snapshotToJSON(base64Snapshot: string): JSONContent {
   const ydoc = new Y.Doc()
   Y.applyUpdate(ydoc, base64ToBytes(base64Snapshot))
   const tmp = new CoreEditor({
-    extensions: [StarterKit.configure({ history: false }), Collaboration.configure({ document: ydoc })],
+    extensions: [...getBaseExtensions(), Collaboration.configure({ document: ydoc })],
     editable: false,
   })
   const json = tmp.getJSON()
