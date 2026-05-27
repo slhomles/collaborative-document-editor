@@ -147,7 +147,6 @@ export function LoginPage() {
               onSuccess={handleGoogleCredential}
               onError={() => {}}
               text={mode === 'login' ? 'signin_with' : 'signup_with'}
-              locale="vi"
               width="320"
             />
           </div>

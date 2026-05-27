@@ -24,7 +24,7 @@ export function EditorPage() {
   const [showShare, setShowShare] = useState(false)
 
   // Quyền truy cập (chia sẻ / chỉ đọc) — nguồn chân lý cho khả năng chỉnh sửa.
-  const { doc, setDoc, canEdit, isOwner, refreshDoc } = useDocumentRole(id!)
+  const { doc, setDoc, canEdit, isOwner, refreshDoc, loading } = useDocumentRole(id!)
 
   async function handleToggleStar() {
     if (!doc) return
@@ -67,6 +67,13 @@ export function EditorPage() {
     provider.connect()
   }, [canEdit, provider])
 
+  // Khi bị thu hồi quyền truy cập (Hạn chế), chủ động ngắt WebSocket kết nối ngầm.
+  useEffect(() => {
+    if (!doc && !loading && provider) {
+      provider.disconnect()
+    }
+  }, [doc, loading, provider])
+
   // Ghi nhận lượt xem tài liệu khi mở trang (Chuẩn Google Drive)
   useEffect(() => {
     if (id) {
@@ -86,6 +93,78 @@ export function EditorPage() {
     } catch {
       // Bỏ qua — refreshDoc sẽ kéo lại tên hiện tại nếu thất bại.
     }
+  }
+
+  // 1. Màn hình đang tải tài liệu (Loading state)
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', background: '#fafafa', gap: 16
+      }}>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        <div style={{
+          width: 40, height: 40, border: '4px solid #f3f3f3',
+          borderTop: '4px solid #d97757', borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <span style={{ fontSize: 14, color: '#666', fontWeight: 500 }}>Đang nạp tài liệu...</span>
+      </div>
+    )
+  }
+
+  // 2. Màn hình Yêu cầu quyền truy cập (Access Denied / 404 state)
+  if (!doc) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: '#f8f9fa', padding: 24
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+          padding: '48px 32px', maxWidth: 440, width: '100%', textAlign: 'center',
+          border: '1px solid #e5e7eb'
+        }}>
+          {/* Lock Icon */}
+          <div style={{
+            width: 72, height: 72, background: '#fffbeb', borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 20px', border: '1px solid #fef3c7'
+          }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d97757" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1f2937', margin: '0 0 10px' }}>
+            Bạn cần có quyền truy cập
+          </h2>
+          
+          <p style={{ fontSize: 14, color: '#4b5563', lineHeight: '1.6', margin: '0 0 28px' }}>
+            Tài liệu này đã được chuyển sang chế độ <strong>Hạn chế</strong>. Chỉ chủ sở hữu và những thành viên được cấp quyền mới có thể xem hoặc chỉnh sửa.
+          </p>
+
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              width: '100%', background: '#d97757', color: '#fff', fontSize: 14,
+              fontWeight: 600, padding: '12px 24px', border: 'none', borderRadius: 8,
+              cursor: 'pointer', transition: 'background 0.15s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#c25e3c'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#d97757'}
+          >
+            Quay lại Trang chủ
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Chế độ lịch sử phiên bản toàn trang.
