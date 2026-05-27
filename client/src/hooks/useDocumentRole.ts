@@ -50,6 +50,8 @@ export function useDocumentRole(documentId: string) {
       }
     } catch (err) {
       console.error('Failed to fetch document', err)
+      setDoc(null)
+      setRole(null)
     } finally {
       setLoading(false)
     }
