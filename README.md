@@ -283,8 +283,8 @@ Dự án thực hiện theo kế hoạch 30 ngày, phân công theo **tính năn
 
 | Người | Mảng phụ trách chính |
 | --- | --- |
-| **An** | Auth, Document CRUD, Version history (API + UI) |
-| **Bình** | Collab engine (Hocuspocus/Yjs), Permissions, Offline sync (API + UI) |
+| **Phương** | Auth, Document CRUD, Permissions |
+| **Phúc** | Collab engine (Hocuspocus/Yjs), Version history (API + UI), Offline sync (API + UI) |
 | **Cả hai** | Docker, Prisma schema, khởi tạo Hocuspocus, kiểm thử, báo cáo |
 
 > Chi tiết lộ trình theo tuần xem [docs/WORK_PLAN.md](docs/WORK_PLAN.md).

@@ -5,6 +5,7 @@ import { getBaseExtensions } from '../lib/editorExtensions'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { Node as PMNode } from '@tiptap/pm/model'
+import { diffWords } from 'diff'
 
 interface Props {
   content: JSONContent | null
@@ -67,6 +68,71 @@ function renderRemovedBlock(node: PMNode): HTMLElement {
   return el
 }
 
+function renderRemovedInline(text: string): HTMLElement {
+  const el = document.createElement('span')
+  el.className = 'diff-deleted'
+  el.textContent = text
+  return el
+}
+
+// Tách phần thực sự khác giữa 2 chuỗi: bỏ tiền tố + hậu tố chung (mức ký tự).
+// "34" vs "3445" → prefix "34", removed "", added "45" (thay vì coi cả token bị thay).
+function trimCommon(rem: string, add: string) {
+  const max = Math.min(rem.length, add.length)
+  let pre = 0
+  while (pre < max && rem[pre] === add[pre]) pre++
+  let suf = 0
+  while (suf < max - pre && rem[rem.length - 1 - suf] === add[add.length - 1 - suf]) suf++
+  return {
+    pre,
+    suf,
+    remMid: rem.slice(pre, rem.length - suf),
+    addMid: add.slice(pre, add.length - suf),
+  }
+}
+
+// Diff theo TỪ giữa 2 đoạn cùng loại (block bị sửa): chỉ tô phần thêm/xóa, giữ nguyên phần chung.
+// Map offset ký tự trong textContent → vị trí ProseMirror (đoạn văn: content bắt đầu tại pos+1).
+function inlineWordDecos(prevNode: PMNode, curr: Block, decos: Decoration[]) {
+  const contentStart = curr.pos + 1
+  let offset = 0
+
+  const pushRemoved = (text: string, key: string) => {
+    decos.push(
+      Decoration.widget(contentStart + offset, () => renderRemovedInline(text), { side: -1, key }),
+    )
+  }
+  const pushAdded = (len: number) => {
+    decos.push(Decoration.inline(contentStart + offset, contentStart + offset + len, { class: 'diff-added' }))
+    offset += len
+  }
+
+  const parts = diffWords(prevNode.textContent, curr.node.textContent)
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    const next = parts[i + 1]
+
+    // Cặp "xóa + thêm" liền nhau = từ bị SỬA → tinh chỉnh theo ký tự để giữ phần chung.
+    if (part.removed && next?.added) {
+      const { pre, suf, remMid, addMid } = trimCommon(part.value, next.value)
+      offset += pre // tiền tố chung đã có trong bản mới → không tô
+      if (remMid) pushRemoved(remMid, `delw-${curr.pos}-${i}`)
+      if (addMid) pushAdded(addMid.length)
+      offset += suf // hậu tố chung
+      i++ // đã xử lý luôn part 'added' ghép cặp
+      continue
+    }
+
+    if (part.added) {
+      pushAdded(part.value.length)
+    } else if (part.removed) {
+      pushRemoved(part.value, `delw-${curr.pos}-${i}`)
+    } else {
+      offset += part.value.length
+    }
+  }
+}
+
 // So sánh nội dung version hiện tại với version trước theo khối → decorations + danh sách mốc (anchors).
 function computeBlockDiff(
   currDoc: PMNode,
@@ -93,7 +159,8 @@ function computeBlockDiff(
 
   let currCursor = 0
   let prevWasChange = false
-  for (const op of ops) {
+  for (let k = 0; k < ops.length; k++) {
+    const op = ops[k]
     if (op.t === 'same') {
       currCursor += currBlocks[op.ci].size
       prevWasChange = false
@@ -105,17 +172,32 @@ function computeBlockDiff(
       if (!prevWasChange) anchors.push(b.pos)
       currCursor += b.size
       prevWasChange = true
-    } else {
-      const pb = prevBlocks[op.pi]
-      const pos = Math.min(currCursor, currDoc.content.size)
-      if (highlight) {
-        decos.push(
-          Decoration.widget(pos, () => renderRemovedBlock(pb.node), { side: -1, key: `del-${op.pi}` }),
-        )
-      }
-      if (!prevWasChange) anchors.push(pos)
-      prevWasChange = true
+      continue
     }
+    // op.t === 'del'
+    const pb = prevBlocks[op.pi]
+    const next = ops[k + 1]
+    // del + add liền nhau, cùng loại textblock → block bị SỬA → diff theo từ trong đoạn.
+    if (next && next.t === 'add') {
+      const cb = currBlocks[next.ci]
+      if (pb.node.isTextblock && cb.node.isTextblock && pb.node.type.name === cb.node.type.name) {
+        if (highlight) inlineWordDecos(pb.node, cb, decos)
+        if (!prevWasChange) anchors.push(cb.pos)
+        currCursor += cb.size
+        prevWasChange = true
+        k++ // đã xử lý luôn op 'add' ghép cặp
+        continue
+      }
+    }
+    // Xóa nguyên block.
+    const pos = Math.min(currCursor, currDoc.content.size)
+    if (highlight) {
+      decos.push(
+        Decoration.widget(pos, () => renderRemovedBlock(pb.node), { side: -1, key: `del-${op.pi}` }),
+      )
+    }
+    if (!prevWasChange) anchors.push(pos)
+    prevWasChange = true
   }
 
   return { decorations: DecorationSet.create(currDoc, decos), anchors }
