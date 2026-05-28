@@ -39,8 +39,12 @@ function dayGroupLabel(iso: string): string {
   return d.toLocaleDateString('vi-VN')
 }
 
+const PAGE_SIZE = 50
+
 export function VersionHistoryView({ documentId, editor, canRestore, onClose }: Props) {
   const [versions, setVersions] = useState<VersionListItem[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [selectedKey, setSelectedKey] = useState<string>(CURRENT_KEY)
   const [content, setContent] = useState<JSONContent | null>(null)
   const [prevContent, setPrevContent] = useState<JSONContent | null>(null)
@@ -87,10 +91,29 @@ export function VersionHistoryView({ documentId, editor, canRestore, onClose }: 
 
   useEffect(() => {
     versionApi
-      .list(documentId)
-      .then((res) => setVersions(res.data as VersionListItem[]))
+      .list(documentId, { limit: PAGE_SIZE })
+      .then((res) => {
+        const data = res.data as { items: VersionListItem[]; nextCursor: string | null }
+        setVersions(data.items)
+        setNextCursor(data.nextCursor)
+      })
       .catch((e) => setError((e as Error).message || 'Không tải được danh sách phiên bản'))
   }, [documentId])
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const res = await versionApi.list(documentId, { limit: PAGE_SIZE, cursor: nextCursor })
+      const data = res.data as { items: VersionListItem[]; nextCursor: string | null }
+      setVersions((prev) => [...prev, ...data.items])
+      setNextCursor(data.nextCursor)
+    } catch (e) {
+      setError((e as Error).message || 'Không tải thêm được')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   // Tính nội dung version đang chọn + version liền trước (để diff).
   useEffect(() => {
@@ -133,11 +156,16 @@ export function VersionHistoryView({ documentId, editor, canRestore, onClose }: 
     setRestoring(true)
     setError(null)
     try {
-      // 1. Backup state hiện tại thành 1 version thủ công.
+      // 1. Backup state hiện tại thành 1 version thủ công. Server reset dirtySince sau khi tạo
+      //    nên các onChange tiếp theo do setContent sinh ra sẽ tính lại từ đầu, không sinh thêm
+      //    auto-snapshot ngay sau backup.
       await versionApi.create(documentId, 'Auto-backup before restore')
       // 2. Thay nội dung qua editor → y-prosemirror sinh xóa+chèn, đồng bộ mọi client.
       const json = await getVersionJSON(selectedKey)
+      editor.commands.blur()
       editor.commands.setContent(json, true)
+      // 3. Đợi Y.Doc settle + cache update gửi server (~CACHE_THROTTLE_MS=300ms phía server).
+      await new Promise((r) => setTimeout(r, 400))
       onClose()
     } catch (e) {
       setError((e as Error).message || 'Khôi phục thất bại')
@@ -253,6 +281,28 @@ export function VersionHistoryView({ documentId, editor, canRestore, onClose }: 
               )
             })}
           </div>
+
+          {nextCursor && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              style={{
+                width: '100%',
+                marginTop: 12,
+                padding: '8px 10px',
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#374151',
+                background: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: 6,
+                cursor: loadingMore ? 'not-allowed' : 'pointer',
+                opacity: loadingMore ? 0.6 : 1,
+              }}
+            >
+              {loadingMore ? 'Đang tải…' : 'Tải thêm'}
+            </button>
+          )}
         </div>
       </div>
     </div>

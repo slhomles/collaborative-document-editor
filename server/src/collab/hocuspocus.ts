@@ -91,7 +91,7 @@ export const hocuspocusServer = Server.configure({
 
     // Auto-snapshot khi nhàn rỗi / định kỳ — chỉ user có quyền ghi.
     if (collabContext.userId) {
-      scheduleAutoSnapshot(documentName, collabContext.userId, state)
+      scheduleAutoSnapshot(documentName, collabContext.userId, state, document)
       // Cập nhật text preview (debounce 8s) để search theo nội dung.
       scheduleContentPreviewUpdate(documentName, extractPlainText(document))
     }

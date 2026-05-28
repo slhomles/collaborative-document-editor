@@ -30,6 +30,29 @@ function sig(node: PMNode): string {
   return `${node.type.name}|${JSON.stringify(node.attrs)}|${node.textContent}`
 }
 
+function normalizeText(s: string): string {
+  return s.trim().replace(/\s+/g, ' ')
+}
+
+// Thu thập textContent của block hiện tại + mọi textblock descendant.
+// Dùng để khớp "paragraph cũ ↔ paragraph nằm trong bulletList mới" (đổi định dạng).
+function blockTexts(node: PMNode): string[] {
+  if (node.isTextblock) {
+    const t = normalizeText(node.textContent)
+    return t ? [t] : []
+  }
+  const out: string[] = []
+  node.descendants((child) => {
+    if (child.isTextblock) {
+      const t = normalizeText(child.textContent)
+      if (t) out.push(t)
+      return false
+    }
+    return true
+  })
+  return out
+}
+
 // LCS giữa 2 mảng chữ ký block → danh sách thao tác (giữ nguyên / thêm / xóa).
 function lcsOps(prev: string[], curr: string[]): Op[] {
   const m = prev.length
@@ -157,6 +180,55 @@ function computeBlockDiff(
   const prevBlocks = topBlocks(prevDoc)
   const ops = lcsOps(prevBlocks.map((b) => sig(b.node)), currBlocks.map((b) => sig(b.node)))
 
+  // Pre-pass 1: đánh dấu các pair "del+add liền nhau, cùng textblock type" (diff theo từ).
+  // Để pre-pass 2 không xét lại các op này.
+  const inlineWordSkipAdd = new Set<number>() // op idx của add bị "tiêu thụ" bởi del liền trước
+  const inlineWordPairFromDel = new Set<number>() // op idx của del có cặp add textblock cùng type liền sau
+  for (let k = 0; k < ops.length - 1; k++) {
+    const op = ops[k]
+    const next = ops[k + 1]
+    if (op.t === 'del' && next.t === 'add') {
+      const pb = prevBlocks[op.pi]
+      const cb = currBlocks[next.ci]
+      if (pb.node.isTextblock && cb.node.isTextblock && pb.node.type.name === cb.node.type.name) {
+        inlineWordPairFromDel.add(k)
+        inlineWordSkipAdd.add(k + 1)
+      }
+    }
+  }
+
+  // Pre-pass 2: ghép các del/add chưa khớp theo textContent (bao gồm descendant textblock).
+  // Bắt được case "paragraph(s) ↔ bulletList/orderedList/blockquote" — text không đổi, chỉ đổi định dạng.
+  const formatChangeDels = new Set<number>()
+  const formatChangeAdds = new Set<number>()
+  const delTextsByOp = new Map<number, Set<string>>()
+  const addTextsByOp = new Map<number, Set<string>>()
+  for (let k = 0; k < ops.length; k++) {
+    const op = ops[k]
+    if (op.t === 'del' && !inlineWordPairFromDel.has(k)) {
+      delTextsByOp.set(k, new Set(blockTexts(prevBlocks[op.pi].node)))
+    }
+    if (op.t === 'add' && !inlineWordSkipAdd.has(k)) {
+      addTextsByOp.set(k, new Set(blockTexts(currBlocks[op.ci].node)))
+    }
+  }
+  for (const [delIdx, delTexts] of delTextsByOp) {
+    if (delTexts.size === 0) continue
+    for (const [addIdx, addTexts] of addTextsByOp) {
+      let intersects = false
+      for (const t of delTexts) {
+        if (addTexts.has(t)) {
+          intersects = true
+          break
+        }
+      }
+      if (intersects) {
+        formatChangeDels.add(delIdx)
+        formatChangeAdds.add(addIdx)
+      }
+    }
+  }
+
   let currCursor = 0
   let prevWasChange = false
   for (let k = 0; k < ops.length; k++) {
@@ -168,13 +240,17 @@ function computeBlockDiff(
     }
     if (op.t === 'add') {
       const b = currBlocks[op.ci]
-      if (highlight) decos.push(Decoration.node(b.pos, b.pos + b.size, { class: 'diff-added-block' }))
+      const cls = formatChangeAdds.has(k) ? 'diff-format-changed' : 'diff-added-block'
+      if (highlight) decos.push(Decoration.node(b.pos, b.pos + b.size, { class: cls }))
       if (!prevWasChange) anchors.push(b.pos)
       currCursor += b.size
       prevWasChange = true
       continue
     }
     // op.t === 'del'
+    // Del bị ghép theo "đổi định dạng" → bỏ render strikethrough. Không cập nhật prevWasChange
+    // để paired add (xuất hiện sau) có cơ hội push anchor cho cụm này.
+    if (formatChangeDels.has(k)) continue
     const pb = prevBlocks[op.pi]
     const next = ops[k + 1]
     // del + add liền nhau, cùng loại textblock → block bị SỬA → diff theo từ trong đoạn.

@@ -24,8 +24,17 @@ export async function listVersions(req: AuthRequest, res: Response, next: NextFu
     })
     if (!doc) return res.status(404).json({ message: 'Document not found' })
 
-    const versions = await listSnapshots(id)
-    res.json(versions)
+    const limitRaw = Number(req.query.limit)
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 200) : 50
+    const cursor = typeof req.query.cursor === 'string' && req.query.cursor ? req.query.cursor : undefined
+
+    const rows = await listSnapshots(id, { limit, cursor })
+    // listSnapshots take = limit + 1 để biết còn trang sau.
+    const hasMore = rows.length > limit
+    const items = hasMore ? rows.slice(0, limit) : rows
+    const nextCursor = hasMore ? items[items.length - 1].id : null
+
+    res.json({ items, nextCursor })
   } catch (err) {
     next(err)
   }

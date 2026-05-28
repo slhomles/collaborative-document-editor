@@ -1,6 +1,7 @@
 import { PrismaClient, Role } from '@prisma/client'
 import Redis from 'ioredis'
 import { createHash } from 'crypto'
+import * as Y from 'yjs'
 
 const prisma = new PrismaClient()
 
@@ -37,9 +38,10 @@ const CONTENT_PREVIEW_DEBOUNCE_MS = 8 * 1000 // ghi text preview tối đa mỗi
 const CONTENT_PREVIEW_MAX_LEN = 2000
 
 // Auto-version kiểu Google Docs: chốt checkpoint khi ngừng gõ (idle) HOẶC tối đa mỗi maxWait
-// dù gõ liên tục, cộng thêm 1 bản chốt khi đóng doc (flushSnapshotOnStore).
-const AUTO_IDLE_MS = 2 * 60 * 1000 // chốt sau 2 phút ngừng gõ
-const AUTO_MAX_WAIT_MS = 10 * 60 * 1000 // vẫn chốt sau tối đa 10 phút dù đang gõ liên tục
+// dù gõ liên tục. flushSnapshotOnStore chỉ tạo bản cuối phiên nếu đã gõ đủ lâu (>= MIN_FLUSH_INTERVAL_MS).
+const AUTO_IDLE_MS = 5 * 60 * 1000 // chốt sau 5 phút ngừng gõ
+const AUTO_MAX_WAIT_MS = 30 * 60 * 1000 // vẫn chốt sau tối đa 30 phút dù đang gõ liên tục
+const MIN_FLUSH_INTERVAL_MS = 5 * 60 * 1000 // bỏ qua flush cuối phiên nếu thay đổi < 5 phút, tránh spam version vặt
 
 const snapshotTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const cacheTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -49,9 +51,10 @@ const pendingContentPreview = new Map<string, string>()
 
 // Trạng thái auto-snapshot theo document.
 const dirtySince = new Map<string, number>() // mốc thay đổi đầu tiên kể từ snapshot cuối
-const lastSnapshotHash = new Map<string, string>() // hash state đã snapshot — chống tạo bản trùng
+const lastSnapshotHash = new Map<string, string>() // hash nội dung đã snapshot — chống tạo bản trùng
 const lastEditorByDoc = new Map<string, string>() // userId người sửa gần nhất → createdBy cho auto-snapshot
 const pendingSnapshotState = new Map<string, Buffer>() // state mới nhất chờ snapshot
+const pendingDocByDoc = new Map<string, Y.Doc>() // Y.Doc tham chiếu để hash nội dung semantic (ổn định qua clientID/clock)
 
 function redisKey(documentId: string) {
   return `yjs:${documentId}`//redis save everything in one place, not have table,so yjs: like virtual folder/collection
@@ -165,6 +168,7 @@ export async function invalidateDocumentCache(documentId: string) {
   lastSnapshotHash.delete(documentId)
   lastEditorByDoc.delete(documentId)
   pendingSnapshotState.delete(documentId)
+  pendingDocByDoc.delete(documentId)
 
   const cpTimer = contentPreviewTimers.get(documentId)
   if (cpTimer) {
@@ -181,27 +185,46 @@ export async function invalidateDocumentCache(documentId: string) {
 }
 
 // Tạo version. isAuto=false dùng cho bản lưu thủ công (đặt tên), không bị prune.
+// Luôn dùng hashContent để khớp định dạng với auto-snapshot — chống auto sinh bản trùng
+// ngay sau khi user lưu thủ công. Nếu không có doc tham chiếu (REST controller), tự
+// reconstruct Y.Doc từ state để hash.
 export async function createSnapshot(
   documentId: string,
   createdBy: string,
   state: Buffer,
   label?: string,
-  isAuto = false
+  isAuto = false,
+  doc?: Y.Doc,
 ) {
   const version = await prisma.documentVersion.create({
     data: { documentId, createdBy, yjsSnapshot: state, label: label ?? null, isAuto },
     select: { id: true, documentId: true, createdBy: true, label: true, isAuto: true, versionNumber: true, createdAt: true },
   })
-  // Đồng bộ hash để auto-snapshot không tạo lại bản trùng ngay sau khi user lưu thủ công.
-  lastSnapshotHash.set(documentId, hashState(state))
+
+  let hash: string
+  if (doc) {
+    hash = hashContent(doc)
+  } else {
+    const tmp = new Y.Doc()
+    Y.applyUpdate(tmp, state)
+    hash = hashContent(tmp)
+    tmp.destroy()
+  }
+  lastSnapshotHash.set(documentId, hash)
   dirtySince.delete(documentId)
   return version
 }
 
-export async function listSnapshots(documentId: string) {
+export async function listSnapshots(
+  documentId: string,
+  opts: { limit?: number; cursor?: string } = {},
+) {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200)
   return prisma.documentVersion.findMany({
     where: { documentId },
     orderBy: { versionNumber: 'desc' },
+    take: limit + 1, // +1 để biết còn trang sau hay không (controller xử lý)
+    ...(opts.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
     select: {
       id: true,
       label: true,
@@ -218,14 +241,20 @@ export async function getSnapshot(snapshotId: string) {
   return prisma.documentVersion.findUnique({ where: { id: snapshotId } })
 }
 
-function hashState(state: Buffer): string {
-  return createHash('sha1').update(state).digest('hex')
+// Hash nội dung semantic (XML fragment 'default' Tiptap Collaboration dùng).
+// Ổn định qua clientID/clock/merge metadata — chống tạo version trùng khi
+// multi-tab/reconnect/IndexedDB sync sinh binary update khác nhau cho cùng 1 nội dung.
+function hashContent(doc: Y.Doc): string {
+  const xml = doc.getXmlFragment('default').toString()
+  return createHash('sha1').update(xml).digest('hex')
 }
 
 // Gọi mỗi lần có thay đổi (từ onChange). Đặt lịch chốt theo idle + maxWait.
-export function scheduleAutoSnapshot(documentId: string, userId: string, state: Buffer) {
+// `doc` được giữ tham chiếu để hash nội dung semantic (chống version trùng).
+export function scheduleAutoSnapshot(documentId: string, userId: string, state: Buffer, doc: Y.Doc) {
   lastEditorByDoc.set(documentId, userId)
   pendingSnapshotState.set(documentId, state)
+  pendingDocByDoc.set(documentId, doc)
   if (!dirtySince.has(documentId)) dirtySince.set(documentId, Date.now())
 
   // maxWait: gõ liên tục quá lâu vẫn phải có checkpoint trung gian.
@@ -242,7 +271,7 @@ export function scheduleAutoSnapshot(documentId: string, userId: string, state: 
   snapshotTimers.set(documentId, timer)
 }
 
-// Thực sự tạo auto-snapshot nếu state đã đổi so với bản chốt gần nhất (chống trùng).
+// Thực sự tạo auto-snapshot nếu nội dung đã đổi so với bản chốt gần nhất (chống trùng).
 async function maybeAutoSnapshot(documentId: string) {
   const timer = snapshotTimers.get(documentId)
   if (timer) clearTimeout(timer)
@@ -250,9 +279,10 @@ async function maybeAutoSnapshot(documentId: string) {
 
   const state = pendingSnapshotState.get(documentId)
   const userId = lastEditorByDoc.get(documentId)
-  if (!state || !userId || !dirtySince.has(documentId)) return
+  const doc = pendingDocByDoc.get(documentId)
+  if (!state || !userId || !doc || !dirtySince.has(documentId)) return
 
-  const hash = hashState(state)
+  const hash = hashContent(doc)
   if (hash === lastSnapshotHash.get(documentId)) {
     dirtySince.delete(documentId) // không có gì mới → coi như đã sạch
     return
@@ -270,13 +300,21 @@ async function maybeAutoSnapshot(documentId: string) {
   }
 }
 
-// Chốt 1 bản cuối khi người dùng cuối rời tài liệu (gọi từ onStoreDocument).
+// Chốt bản cuối khi người dùng cuối rời tài liệu (gọi từ onStoreDocument), nhưng có điều kiện:
+// chỉ tạo version nếu đã thay đổi >= MIN_FLUSH_INTERVAL_MS — tránh sinh version vặt khi user
+// reload tab nhanh hoặc edit ngắn rồi đóng. Nội dung doc vẫn được lưu qua storeDocument bình thường.
 export async function flushSnapshotOnStore(documentId: string) {
-  if (dirtySince.has(documentId)) await maybeAutoSnapshot(documentId)
+  if (!dirtySince.has(documentId)) return
+  const dirtyFor = Date.now() - dirtySince.get(documentId)!
+  if (dirtyFor < MIN_FLUSH_INTERVAL_MS) {
+    dirtySince.delete(documentId) // bỏ qua flush, nhưng coi như đã sạch để khỏi trigger ngay khi mở lại
+    return
+  }
+  await maybeAutoSnapshot(documentId)
 }
 
 // Giữ thưa dần các auto-version để danh sách gọn (kiểu Google Docs).
-// <1h: giữ tất cả; 1h–24h: giữ bản mới nhất mỗi giờ; >24h: giữ bản mới nhất mỗi ngày.
+// <10p: giữ tất cả; 10p–1h: 1 bản mỗi 10 phút; 1h–24h: 1 bản mỗi giờ; >24h: 1 bản mỗi ngày.
 // Không bao giờ đụng tới bản thủ công (isAuto=false).
 async function pruneAutoVersions(documentId: string) {
   const autoVersions = await prisma.documentVersion.findMany({
@@ -286,6 +324,7 @@ async function pruneAutoVersions(documentId: string) {
   })
 
   const now = Date.now()
+  const TEN_MINUTES = 10 * 60 * 1000
   const ONE_HOUR = 60 * 60 * 1000
   const ONE_DAY = 24 * ONE_HOUR
   const keptBuckets = new Set<string>() // bucket đã có 1 bản được giữ
@@ -293,13 +332,16 @@ async function pruneAutoVersions(documentId: string) {
 
   for (const v of autoVersions) {
     const age = now - v.createdAt.getTime()
-    if (age < ONE_HOUR) continue // giữ tất cả bản gần đây
+    if (age < TEN_MINUTES) continue // giữ tất cả bản rất gần đây
 
-    // bucket theo giờ (1h–24h) hoặc theo ngày (>24h)
-    const bucket =
-      age < ONE_DAY
-        ? `h:${Math.floor(v.createdAt.getTime() / ONE_HOUR)}`
-        : `d:${Math.floor(v.createdAt.getTime() / ONE_DAY)}`
+    let bucket: string
+    if (age < ONE_HOUR) {
+      bucket = `m10:${Math.floor(v.createdAt.getTime() / TEN_MINUTES)}`
+    } else if (age < ONE_DAY) {
+      bucket = `h:${Math.floor(v.createdAt.getTime() / ONE_HOUR)}`
+    } else {
+      bucket = `d:${Math.floor(v.createdAt.getTime() / ONE_DAY)}`
+    }
 
     if (keptBuckets.has(bucket)) {
       toDelete.push(v.id) // bucket đã có bản mới nhất → xóa bản cũ hơn

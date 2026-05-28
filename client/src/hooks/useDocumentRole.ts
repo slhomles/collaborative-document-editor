@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { AxiosError } from 'axios'
 import { documentApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 
@@ -50,8 +51,15 @@ export function useDocumentRole(documentId: string) {
       }
     } catch (err) {
       console.error('Failed to fetch document', err)
-      setDoc(null)
-      setRole(null)
+      
+      const axiosErr = err as AxiosError
+      // Nếu là lỗi phân quyền (401, 403) hoặc tài liệu bị xóa/không tìm thấy (404)
+      const status = axiosErr.response?.status
+      if (status === 401 || status === 403 || status === 404) {
+        setDoc(null)
+        setRole(null)
+      }
+      // Các trường hợp khác (mất mạng, server 5xx), giữ nguyên trạng thái cũ để tiếp tục làm việc offline.
     } finally {
       setLoading(false)
     }

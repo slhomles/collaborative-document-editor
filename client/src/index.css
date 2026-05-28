@@ -54,6 +54,28 @@ body {
   100% { background: transparent; }
 }
 
+/* Đổi định dạng (paragraph ↔ list, đổi heading level, …) — text giữ nguyên. */
+.diff-format-changed {
+  background: transparent;
+  border-radius: 3px;
+  box-shadow: inset 3px 0 0 #2563eb;
+  padding: 2px 6px;
+  position: relative;
+}
+.diff-format-changed::after {
+  content: 'Đổi định dạng';
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 1px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
 /* Vùng xem nội dung version (full size, như trang soạn thảo). */
 .version-diff .ProseMirror {
   outline: none;

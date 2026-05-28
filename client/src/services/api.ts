@@ -56,7 +56,8 @@ export const documentApi = {
 
 // Versions
 export const versionApi = {
-  list: (docId: string) => api.get(`/documents/${docId}/versions`),
+  list: (docId: string, opts: { limit?: number; cursor?: string } = {}) =>
+    api.get(`/documents/${docId}/versions`, { params: opts }),
   create: (docId: string, label?: string) => api.post(`/documents/${docId}/versions`, { label }),
   get: (docId: string, versionId: string) => api.get(`/documents/${docId}/versions/${versionId}`),
 }

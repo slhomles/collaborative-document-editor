@@ -1,8 +1,6 @@
 import * as Y from 'yjs'
-import { Editor as CoreEditor } from '@tiptap/react'
+import { yDocToProsemirrorJSON } from 'y-prosemirror'
 import type { JSONContent } from '@tiptap/react'
-import Collaboration from '@tiptap/extension-collaboration'
-import { getBaseExtensions } from './editorExtensions'
 
 export function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64)
@@ -11,17 +9,13 @@ export function base64ToBytes(b64: string): Uint8Array {
   return bytes
 }
 
-// Chuyển một snapshot Yjs (base64) thành ProseMirror JSON, qua một editor tạm read-only.
-// Dùng để hiển thị nội dung version và để diff giữa các version.
+// Chuyển snapshot Yjs (base64) sang ProseMirror JSON. Dùng yDocToProsemirrorJSON
+// để convert trực tiếp Y.XmlFragment → JSON, tránh race với editor tạm khiến
+// attribute (checked của TaskItem, color, highlight, …) bị mất.
 export function snapshotToJSON(base64Snapshot: string): JSONContent {
   const ydoc = new Y.Doc()
   Y.applyUpdate(ydoc, base64ToBytes(base64Snapshot))
-  const tmp = new CoreEditor({
-    extensions: [...getBaseExtensions(), Collaboration.configure({ document: ydoc })],
-    editable: false,
-  })
-  const json = tmp.getJSON()
-  tmp.destroy()
+  const json = yDocToProsemirrorJSON(ydoc, 'default') as JSONContent
   ydoc.destroy()
   return json
 }
